@@ -4,17 +4,13 @@ scraper.py
 - Reads JSON config files from ./config/*.json
 - Scrapes article data using Playwright
 - Appends new articles to a single Google Sheet (dedup by link)
-
-Requirements:
-  pip install playwright gspread oauth2client python-dateutil
-  playwright install
 """
 
 import os
 import json
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urljoin
 from gspread.exceptions import APIError
@@ -30,6 +26,13 @@ CONFIG_DIR = "config"
 SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"
 CUT_OFF_HOURS = 25
 # ----------------------------------------
+
+# --- Define IST Timezone ---
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def now_ist():
+    """Return current datetime in IST timezone."""
+    return datetime.now(IST)
 
 # Google Sheets Auth from GitHub Secret
 GSHEET_CREDS_JSON = os.environ.get("GSHEET_CREDS")
@@ -51,7 +54,7 @@ def load_existing_links(days_limit=2):
     links = set()
     if len(all_rows) <= 1:
         return links
-    now = datetime.now()
+    now = now_ist()
     cutoff = now - timedelta(days=days_limit)
     for row in all_rows[1:]:
         if len(row) < 4:
@@ -91,7 +94,7 @@ class DateParser:
         ]:
             text = re.sub(p, " ", text, flags=re.IGNORECASE).strip()
         text = re.sub(r"[,|•]", " ", text).strip()
-        now = datetime.now()
+        now = now_ist()
         if "ago" in text.lower():
             return DateParser.parse_relative(text, now)
         if "today" in text.lower():
@@ -100,7 +103,7 @@ class DateParser:
             return (now - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
         try:
             parsed = dateutil.parser.parse(text, fuzzy=True)
-            return parsed.replace(hour=12, minute=0, second=0, microsecond=0)
+            return parsed.replace(tzinfo=IST, hour=12, minute=0, second=0, microsecond=0)
         except Exception:
             return None
 
@@ -136,7 +139,9 @@ class DateParser:
 
     @staticmethod
     def format(dt):
-        return dt.strftime("%Y-%m-%d %H:%M:%S") if dt else ""
+        if not dt:
+            return ""
+        return dt.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S")
 
 # ---------------- Scraper ----------------
 class SheetNewsScraper:
@@ -144,7 +149,7 @@ class SheetNewsScraper:
         self.config_dir = Path(config_dir)
         if not self.config_dir.exists():
             raise FileNotFoundError(f"Config dir not found: {self.config_dir}")
-        self.cutoff_time = datetime.now() - timedelta(hours=CUT_OFF_HOURS)
+        self.cutoff_time = now_ist() - timedelta(hours=CUT_OFF_HOURS)
 
     def get_configs(self):
         return [p for p in self.config_dir.glob("*.json")]
@@ -250,7 +255,7 @@ class SheetNewsScraper:
             "author": author,
             "image": image,
             "published_date": published_date,
-            "scraped_at": DateParser.format(datetime.now()),
+            "scraped_at": DateParser.format(now_ist()),
         }
 
     def is_valid(self, art):
@@ -266,7 +271,7 @@ class SheetNewsScraper:
 
     def save_articles(self, articles):
         global existing_links
-        existing_links = load_existing_links()  # refresh links before saving
+        existing_links = load_existing_links()
         saved = 0
         for a in articles:
             link_clean = a["link"].strip().rstrip("/")
