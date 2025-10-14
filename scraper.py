@@ -13,11 +13,11 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urljoin
-from gspread.exceptions import APIError
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
 from playwright.sync_api import sync_playwright
 import gspread
+from gspread.exceptions import APIError
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ---------------- CONFIG ----------------
@@ -27,14 +27,12 @@ SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"
 CUT_OFF_HOURS = 25
 # ----------------------------------------
 
-# --- Define IST Timezone ---
 IST = timezone(timedelta(hours=5, minutes=30))
 
 def now_ist():
-    """Return current datetime in IST timezone."""
     return datetime.now(IST)
 
-# Google Sheets Auth from GitHub Secret
+# ---------------- GOOGLE SHEET AUTH ----------------
 GSHEET_CREDS_JSON = os.environ.get("GSHEET_CREDS")
 if not GSHEET_CREDS_JSON:
     raise RuntimeError("Environment variable GSHEET_CREDS is not set!")
@@ -48,52 +46,32 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 gc = gspread.authorize(creds)
 sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
 
-# ---------------- Load Existing Links ----------------
-def load_existing_links(days_limit=2):
-    all_rows = sheet.get_all_values()
+# ---------------- EXISTING LINKS ----------------
+def load_existing_links():
+    """Fetch all links from Google Sheet."""
+    try:
+        rows = sheet.get_all_values()
+    except APIError as e:
+        print(f"⚠️ Failed to load sheet data: {e}")
+        return set()
+
     links = set()
-    if len(all_rows) <= 1:
-        return links
-    now = now_ist()
-    cutoff = now - timedelta(days=days_limit)
-    for row in all_rows[1:]:
-        if len(row) < 4:
-            continue
-        date_str = row[2].strip() if len(row) > 2 else ""
-        link = row[3].strip().rstrip("/") if len(row) > 3 else ""
-        if not link:
-            continue
-        try:
-            if date_str:
-                parsed_date = dateutil.parser.parse(date_str)
-                if parsed_date >= cutoff:
-                    links.add(link)
-        except Exception:
-            continue
+    for row in rows[1:]:
+        if len(row) > 3 and row[3].strip():
+            links.add(row[3].strip().rstrip("/"))
     return links
 
 existing_links = load_existing_links()
 print(f"✅ Loaded {len(existing_links)} existing links from sheet")
 
-# ---------------- Date Parser ----------------
+# ---------------- DATE PARSER ----------------
 class DateParser:
     @staticmethod
     def parse_date(date_text):
         if not date_text:
             return None
         text = str(date_text).strip()
-        for p in [
-            r"BY\s+[\w\s]+",
-            r"by\s+[\w\s]+",
-            r"Posted\s+on",
-            r"Published\s+on",
-            r"Updated\s+on",
-            r"•",
-            r"\|\s*",
-            r"\s-\s",
-        ]:
-            text = re.sub(p, " ", text, flags=re.IGNORECASE).strip()
-        text = re.sub(r"[,|•]", " ", text).strip()
+        text = re.sub(r"[,|•]", " ", text)
         now = now_ist()
         if "ago" in text.lower():
             return DateParser.parse_relative(text, now)
@@ -123,27 +101,22 @@ class DateParser:
             m = re.search(patt, text, re.IGNORECASE)
             if m:
                 n = int(m.group(1))
-                if unit == "hours":
-                    return now - timedelta(hours=n)
-                if unit == "minutes":
-                    return now - timedelta(minutes=n)
-                if unit == "days":
-                    return now - timedelta(days=n)
-                if unit == "weeks":
-                    return now - timedelta(weeks=n)
-                if unit == "months":
-                    return now - relativedelta(months=n)
-                if unit == "years":
-                    return now - relativedelta(years=n)
+                delta = {
+                    "hours": timedelta(hours=n),
+                    "minutes": timedelta(minutes=n),
+                    "days": timedelta(days=n),
+                    "weeks": timedelta(weeks=n),
+                    "months": relativedelta(months=n),
+                    "years": relativedelta(years=n),
+                }[unit]
+                return now - delta
         return None
 
     @staticmethod
     def format(dt):
-        if not dt:
-            return ""
-        return dt.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S")
+        return dt.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S") if dt else ""
 
-# ---------------- Scraper ----------------
+# ---------------- SCRAPER ----------------
 class SheetNewsScraper:
     def __init__(self, config_dir=CONFIG_DIR):
         self.config_dir = Path(config_dir)
@@ -163,56 +136,46 @@ class SheetNewsScraper:
         total_found = 0
         total_saved = 0
         for cfg_path in configs:
+            config = self.load_config(cfg_path)
+            site_name = config.get("site", cfg_path.stem)
+            print(f"\n🚀 Starting: {site_name}")
             try:
-                config = self.load_config(cfg_path)
-                site_articles = self.scrape_site(config)
-                total_found += len(site_articles)
-                saved = self.save_articles(site_articles)
+                articles = self.scrape_site(config)
+                total_found += len(articles)
+                saved = self.save_articles(articles)
                 total_saved += saved
-                print(f"📊 {config.get('site', cfg_path.stem)}: found={len(site_articles)} saved={saved}")
+                print(f"📊 {site_name}: found={len(articles)} | saved={saved}")
             except Exception as e:
-                print(f"❌ Error processing {cfg_path}: {e}")
-        print(f"\n🎉 Done. Found {total_found} articles, saved {total_saved} new rows.")
+                print(f"❌ Error processing {site_name}: {e}")
+        print(f"\n🎉 Done. Total found={total_found}, saved={total_saved} new rows.")
 
     def scrape_site(self, config):
-        site_name = config.get("site", config.get("source_name", "Unknown"))
         base_url = config["base_url"]
         selectors = config["article"]
         limit = config.get("limit", 20)
         articles = []
-
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-            context = browser.new_context(viewport={"width": 1280, "height": 800})
-            page = context.new_page()
+            page = browser.new_page()
             try:
-                print(f"🌐 Visiting {base_url}")
                 page.goto(base_url, wait_until="domcontentloaded", timeout=45000)
-                try:
-                    page.wait_for_selector(selectors["container"], timeout=15000)
-                except Exception:
-                    pass
-                time.sleep(1)
+                page.wait_for_selector(selectors["container"], timeout=10000)
                 elements = page.query_selector_all(selectors["container"])
-                print(f"🔎 Found {len(elements)} candidate elements on {site_name}")
+                print(f"🔍 Found {len(elements)} elements")
                 for el in elements[:limit]:
-                    try:
-                        data = self.extract_article(el, page, config)
-                        if self.is_valid(data):
-                            if data.get("published_date") and data["published_date"] < self.cutoff_time:
-                                continue
-                            articles.append(data)
-                    except Exception:
-                        continue
+                    data = self.extract_article(el, base_url, config)
+                    if self.is_valid(data):
+                        if data.get("published_date") and data["published_date"] < self.cutoff_time:
+                            continue
+                        articles.append(data)
             except Exception as e:
-                print(f"❌ Scrape error for {site_name}: {e}")
+                print(f"⚠️ Scrape error for {base_url}: {e}")
             finally:
                 browser.close()
         return articles
 
-    def extract_article(self, el, page, config):
+    def extract_article(self, el, base_url, config):
         selectors = config["article"]
-        base = config["base_url"]
         site_name = config.get("site", "Unknown")
 
         def q(sel):
@@ -229,28 +192,27 @@ class SheetNewsScraper:
         if link_el:
             href = link_el.get_attribute("href") or link_el.get_attribute("data-href")
             if href:
-                link = urljoin(base, href.strip()).rstrip("/")
+                link = urljoin(base_url, href.strip()).rstrip("/")
 
-        title = title_el.text_content().strip() if title_el else (link_el.text_content().strip() if link_el else None)
+        title = title_el.text_content().strip() if title_el else None
         snippet = snippet_el.text_content().strip() if snippet_el else None
         author = author_el.text_content().strip() if author_el else None
 
         image = None
         if image_el:
-            src = image_el.get_attribute("src") or image_el.get_attribute("data-src") or image_el.get_attribute("data-lazy")
+            src = image_el.get_attribute("src") or image_el.get_attribute("data-src")
             if src:
-                image = urljoin(base, src.strip())
+                image = urljoin(base_url, src.strip())
 
         published_date = None
         if date_el:
-            raw = date_el.text_content().strip()
-            published_date = DateParser.parse_date(raw)
+            published_date = DateParser.parse_date(date_el.text_content())
 
         return {
             "source": site_name,
             "title": title,
             "link": link,
-            "date_text": DateParser.format(published_date) if published_date else "",
+            "date_text": DateParser.format(published_date),
             "snippet": snippet,
             "author": author,
             "image": image,
@@ -263,47 +225,41 @@ class SheetNewsScraper:
             return False
         if len(art["title"]) < 6:
             return False
-        if not art["link"].startswith("http"):
-            return False
-        if art["link"].strip().rstrip("/") in existing_links:
+        link_clean = art["link"].strip().rstrip("/")
+        if link_clean in existing_links:
+            print(f"⏩ Skipping duplicate: {link_clean}")
             return False
         return True
 
     def save_articles(self, articles):
         global existing_links
-        existing_links = load_existing_links()
         saved = 0
         for a in articles:
             link_clean = a["link"].strip().rstrip("/")
             if link_clean in existing_links:
                 continue
             row = [
-                a.get("source") or "",
-                a.get("title") or "",
-                a.get("date_text") or "",
+                a.get("source", ""),
+                a.get("title", ""),
+                a.get("date_text", ""),
                 link_clean,
-                a.get("author") or "",
-                a.get("snippet") or "",
-                a.get("image") or "",
-                a.get("scraped_at") or "",
+                a.get("author", ""),
+                a.get("snippet", ""),
+                a.get("image", ""),
+                a.get("scraped_at", ""),
             ]
-            while True:
-                try:
-                    sheet.append_row(row)
-                    existing_links.add(link_clean)
-                    saved += 1
-                    print(f"💾 Saved: {a.get('title')[:70]}")
-                    break
-                except APIError as e:
-                    if e.response.status_code == 429:
-                        print("⚠️ Quota exceeded. Waiting 30 seconds before retry...")
-                        time.sleep(30)
-                    else:
-                        print(f"❌ Error saving row: {e}")
-                        break
+            try:
+                sheet.append_row(row)
+                existing_links.add(link_clean)
+                saved += 1
+                print(f"💾 Saved: {a.get('title')[:70]}")
+            except APIError as e:
+                print(f"❌ Error saving row: {e}")
+                if e.response.status_code == 429:
+                    print("⚠️ Rate limit hit. Retrying in 30s...")
+                    time.sleep(30)
         return saved
 
-# ---------------- Run ----------------
 if __name__ == "__main__":
     scraper = SheetNewsScraper(CONFIG_DIR)
     scraper.run()
