@@ -26,57 +26,47 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # ---------------- CONFIG ----------------
 SHEET_NAME = "jharkhand_news"
-CREDS_FILE = "newsscraper-464517-cfe3f21af714.json"
 CONFIG_DIR = "config"
 SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"
 CUT_OFF_HOURS = 25
 # ----------------------------------------
 
-# Google Sheets Auth
+# Google Sheets Auth from GitHub Secret
+GSHEET_CREDS_JSON = os.environ.get("GSHEET_CREDS")
+if not GSHEET_CREDS_JSON:
+    raise RuntimeError("Environment variable GSHEET_CREDS is not set!")
+
+creds_dict = json.loads(GSHEET_CREDS_JSON)
 scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
 ]
-if not os.path.exists(CREDS_FILE):
-    raise FileNotFoundError(f"Google credentials file not found: {CREDS_FILE}")
-
-creds = ServiceAccountCredentials.from_json_keyfile_name(CREDS_FILE, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 gc = gspread.authorize(creds)
 sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
 
 # ---------------- Load Existing Links ----------------
 def load_existing_links(days_limit=2):
-    """Load only links from the last `days_limit` days from the Google Sheet."""
     all_rows = sheet.get_all_values()
     links = set()
-
     if len(all_rows) <= 1:
         return links
-
     now = datetime.now()
     cutoff = now - timedelta(days=days_limit)
-
     for row in all_rows[1:]:
         if len(row) < 4:
             continue
-
-        date_str = row[2].strip() if len(row) > 2 else ""  # Assuming date is in 3rd column
+        date_str = row[2].strip() if len(row) > 2 else ""
         link = row[3].strip().rstrip("/") if len(row) > 3 else ""
-
-        # Skip rows without link
         if not link:
             continue
-
-        # Parse date and filter
         try:
             if date_str:
                 parsed_date = dateutil.parser.parse(date_str)
                 if parsed_date >= cutoff:
                     links.add(link)
         except Exception:
-            # If date parsing fails, skip the row
             continue
-
     return links
 
 existing_links = load_existing_links()
@@ -89,7 +79,6 @@ class DateParser:
         if not date_text:
             return None
         text = str(date_text).strip()
-        # Remove noise
         for p in [
             r"BY\s+[\w\s]+",
             r"by\s+[\w\s]+",
@@ -103,15 +92,12 @@ class DateParser:
             text = re.sub(p, " ", text, flags=re.IGNORECASE).strip()
         text = re.sub(r"[,|•]", " ", text).strip()
         now = datetime.now()
-
-        # relative times
         if "ago" in text.lower():
             return DateParser.parse_relative(text, now)
         if "today" in text.lower():
             return now.replace(hour=12, minute=0, second=0, microsecond=0)
         if "yesterday" in text.lower():
             return (now - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
-
         try:
             parsed = dateutil.parser.parse(text, fuzzy=True)
             return parsed.replace(hour=12, minute=0, second=0, microsecond=0)
@@ -152,7 +138,6 @@ class DateParser:
     def format(dt):
         return dt.strftime("%Y-%m-%d %H:%M:%S") if dt else ""
 
-
 # ---------------- Scraper ----------------
 class SheetNewsScraper:
     def __init__(self, config_dir=CONFIG_DIR):
@@ -172,7 +157,6 @@ class SheetNewsScraper:
         configs = self.get_configs()
         total_found = 0
         total_saved = 0
-
         for cfg_path in configs:
             try:
                 config = self.load_config(cfg_path)
@@ -183,7 +167,6 @@ class SheetNewsScraper:
                 print(f"📊 {config.get('site', cfg_path.stem)}: found={len(site_articles)} saved={saved}")
             except Exception as e:
                 print(f"❌ Error processing {cfg_path}: {e}")
-
         print(f"\n🎉 Done. Found {total_found} articles, saved {total_saved} new rows.")
 
     def scrape_site(self, config):
@@ -200,16 +183,13 @@ class SheetNewsScraper:
             try:
                 print(f"🌐 Visiting {base_url}")
                 page.goto(base_url, wait_until="domcontentloaded", timeout=45000)
-
                 try:
                     page.wait_for_selector(selectors["container"], timeout=15000)
                 except Exception:
                     pass
-
                 time.sleep(1)
                 elements = page.query_selector_all(selectors["container"])
                 print(f"🔎 Found {len(elements)} candidate elements on {site_name}")
-
                 for el in elements[:limit]:
                     try:
                         data = self.extract_article(el, page, config)
@@ -252,11 +232,7 @@ class SheetNewsScraper:
 
         image = None
         if image_el:
-            src = (
-                image_el.get_attribute("src")
-                or image_el.get_attribute("data-src")
-                or image_el.get_attribute("data-lazy")
-            )
+            src = image_el.get_attribute("src") or image_el.get_attribute("data-src") or image_el.get_attribute("data-lazy")
             if src:
                 image = urljoin(base, src.strip())
 
@@ -291,13 +267,11 @@ class SheetNewsScraper:
     def save_articles(self, articles):
         global existing_links
         existing_links = load_existing_links()  # refresh links before saving
-
         saved = 0
         for a in articles:
             link_clean = a["link"].strip().rstrip("/")
             if link_clean in existing_links:
                 continue
-
             row = [
                 a.get("source") or "",
                 a.get("title") or "",
@@ -308,7 +282,6 @@ class SheetNewsScraper:
                 a.get("image") or "",
                 a.get("scraped_at") or "",
             ]
-
             while True:
                 try:
                     sheet.append_row(row)
@@ -324,7 +297,6 @@ class SheetNewsScraper:
                         print(f"❌ Error saving row: {e}")
                         break
         return saved
-
 
 # ---------------- Run ----------------
 if __name__ == "__main__":

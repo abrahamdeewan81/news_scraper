@@ -1,0 +1,24 @@
+name: Scraper
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # runs every hour
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    env:
+      GSHEET_CREDS: ${{ secrets.GSHEET_CREDS }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install playwright gspread oauth2client python-dateutil
+          playwright install
+      - name: Run scraper
+        run: python scraper.py
