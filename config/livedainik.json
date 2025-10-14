@@ -1,0 +1,13 @@
+{
+  "site": "Live Dainik",
+  "base_url": "https://livedainik.com",
+  "article": {
+    "container": ".p-wrap.p-grid, .p-wrap, [data-pid]",
+    "title": "h4.entry-title a, h4 a, .entry-title a, h3 a, h2 a",
+    "link": "h4.entry-title a, h4 a, .entry-title a, h3 a, h2 a, a.p-url",
+    "image": ".p-featured img, .feat-holder img, img.featured-img, img.wp-post-image",
+    "author": ".meta-author, .author, .post-author, .byline",
+    "date": "time, .entry-meta .posted-on, .post-date", 
+    "snippet": ".p-excerpt, .entry-summary, .excerpt, p"
+  }
+}

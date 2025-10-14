@@ -1,0 +1,13 @@
+{
+    "site": "TheFollowUp",
+    "base_url": "https://thefollowup.in/jharkhand",
+    "article": {
+        "container": "div.post-vertical-full",
+        "title": "h5",
+        "link": "a[href^='https://thefollowup.in']",
+        "image": "img.img-fluid",
+        "author": "p.post-author span.text-danger",
+        "date": "p.post-author", 
+        "snippet": "p.post-content"
+    }
+}

@@ -1,0 +1,13 @@
+{
+  "site": "Hindustan",
+  "base_url": "https://www.livehindustan.com/jharkhand/news",
+  "article": {
+    "container": ".NewsListing_newsLstWrp__2IalP li",
+    "title": "h2.NewsListing_title__HTq7U",
+    "link": "a[href*='livehindustan.com']",
+    "image": ".NewsListing_lft__W7MDE img",
+    "author": "",
+    "date": ".NewsListing_tmStmp__df1m0",
+    "snippet": ".NewsListing_rgt__BbdBm p"
+  }
+}

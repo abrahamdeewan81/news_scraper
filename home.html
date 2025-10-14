@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>News Monitor — Latest Articles</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin: 0; padding: 0; background: #f7f7f9; color: #111;}
+    header {background: #0b5cff; color: #fff; padding: 14px 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);}
+    .container {max-width: 980px; margin: 18px auto; padding: 0 12px;}
+    .card {background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);}
+    .thumb {width: 120px; height: 80px; object-fit: cover; border-radius: 6px; flex: 0 0 120px;}
+    .meta {font-size: 13px; color: #666; margin-bottom: 6px;}
+    .title {font-size: 16px; margin: 0 0 6px 0; color: #111;}
+    .snippet {color: #333; font-size: 14px; line-height: 1.4;}
+    .controls {display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; align-items: center;}
+    .search, .filter, .date-input {padding: 8px 10px; border-radius: 6px; border: 1px solid #d6d6d6;}
+    .search {width: 100%; max-width: 300px;}
+    .filter, .date-input {background: #fff;}
+    .small {font-size: 12px; color: #666;}
+    a.title-link {text-decoration: none; color: inherit;}
+    .empty {text-align: center; color: #666; padding: 36px 0; background: #fff; border-radius: 8px;}
+    .error {background: #ffe6e6; color: #d00; padding: 12px; border-radius: 6px; margin: 12px 0;}
+    .scraped-info {font-size: 11px; color: #888; margin-top: 8px; border-top: 1px solid #f0f0f0; padding-top: 6px;}
+    .pagination {display: flex; justify-content: center; align-items: center; gap: 8px; margin: 20px 0; flex-wrap: wrap;}
+    .pagination button {padding: 8px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; min-width: 40px;}
+    .pagination button:hover:not(:disabled) {background: #f5f5f5;}
+    .pagination button.active {background: #0b5cff; color: white; border-color: #0b5cff;}
+    .pagination button:disabled {opacity: 0.5; cursor: not-allowed;}
+    .page-info {margin: 0 12px; font-size: 14px; color: #666;}
+    .pagination-controls {display: flex; align-items: center; gap: 8px;}
+    .proxy-info {font-size: 12px; color: #666; background: #f0f8ff; padding: 8px; border-radius: 4px; margin: 10px 0; text-align: center;}
+    button#applyDateFilter {padding: 8px 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;}
+    button#applyDateFilter:hover {background: #f5f5f5;}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1 style="margin:0;font-size:20px;">News Monitor</h1>
+      <div style="font-size:13px;opacity:0.95;">Latest scraped articles (from Google Sheet)</div>
+    </div>
+  </header>
+
+  <main class="container" id="app">
+    <div id="proxyStatus" class="proxy-info" style="display:none;"></div>
+    <div class="controls">
+      <input id="search" class="search" placeholder="Search title or snippet..." />
+      <select id="sourceFilter" class="filter"><option value="">All sources</option></select>
+      <input type="date" id="startDate" class="date-input" />
+      <input type="date" id="endDate" class="date-input" />
+      <button id="applyDateFilter">Filter</button>
+      <div style="margin-left:auto" class="small" id="count"></div>
+    </div>
+
+    <div id="list"></div>
+    <div id="loading" class="empty">Loading articles…</div>
+    <div id="error" class="empty" style="display:none;"></div>
+    <div id="pagination" class="pagination" style="display:none;"></div>
+  </main>
+
+  <script>
+    const SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"; 
+    const SHEET_GID = "0"; 
+    const ARTICLES_PER_PAGE = 50;
+
+    const CORS_PROXIES = [
+      'https://api.allorigins.win/raw?url=',
+      'https://corsproxy.io/?',
+      'https://cors-anywhere.herokuapp.com/',
+      'https://api.codetabs.com/v1/proxy?quest='
+    ];
+    const DIRECT_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+
+    const listEl = document.getElementById('list');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    const paginationEl = document.getElementById('pagination');
+    const proxyStatusEl = document.getElementById('proxyStatus');
+    const searchInput = document.getElementById('search');
+    const sourceFilter = document.getElementById('sourceFilter');
+    const countEl = document.getElementById('count');
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+    const applyDateFilterBtn = document.getElementById('applyDateFilter');
+
+    let articles = [];
+    let filteredArticles = [];
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentProxyIndex = 0;
+
+    let customStartDate = null;
+    let customEndDate = null;
+
+    function updateProxyStatus(message) {
+      proxyStatusEl.style.display = 'block';
+      proxyStatusEl.textContent = message;
+    }
+
+    function showError(message, details = '') {
+      loadingEl.style.display = 'none';
+      paginationEl.style.display = 'none';
+      proxyStatusEl.style.display = 'none';
+      errorEl.style.display = 'block';
+      errorEl.innerHTML = `Error: ${message} ${details}`;
+    }
+
+    async function fetchSheet() {
+      const proxyUrl = CORS_PROXIES[currentProxyIndex] + encodeURIComponent(DIRECT_URL);
+      updateProxyStatus(`Trying proxy ${currentProxyIndex + 1}/${CORS_PROXIES.length}...`);
+      try {
+        const res = await fetch(proxyUrl);
+        const text = await res.text();
+        const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
+        if (!match || !match[1]) throw new Error("Invalid response format");
+        const data = JSON.parse(match[1]);
+        if (data.status !== 'ok') throw new Error('Google API error');
+        parseGViz(data);
+      } catch (err) {
+        console.error(err);
+        if (currentProxyIndex < CORS_PROXIES.length - 1) {
+          currentProxyIndex++;
+          setTimeout(fetchSheet, 1000);
+        } else {
+          showError('All proxies failed', err.message);
+        }
+      }
+    }
+
+    function parseGViz(data) {
+      const rows = data.table.rows || [];
+      articles = rows.slice(1).map(r => {
+        const v = r.c ? r.c.map(c => c ? (c.v !== null ? c.v : '') : '') : [];
+        return {
+          source: v[0] || '',
+          title: v[1] || '',
+          date: v[2] || '',
+          link: v[3] || '',
+          author: v[4] || '',
+          snippet: v[5] || '',
+          image: v[6] || '',
+          scraped_at: v[7] || ''
+        };
+      }).filter(a => a.title || a.snippet);
+
+      articles.forEach(a => a._ts = Date.parse(a.scraped_at) || Date.parse(a.date) || 0);
+      articles.sort((a,b) => b._ts - a._ts);
+      render();
+    }
+
+    function filterArticles() {
+      const q = searchInput.value.trim().toLowerCase();
+      const sourceVal = sourceFilter.value;
+
+      const now = new Date();
+      let startFilter = customStartDate ? new Date(customStartDate) : new Date(now - 2 * 24 * 60 * 60 * 1000);
+      let endFilter = customEndDate ? new Date(customEndDate) : now;
+
+      filteredArticles = articles.filter(a => {
+        const articleDate = new Date(a._ts);
+        if (articleDate < startFilter || articleDate > endFilter) return false;
+        if (sourceVal && a.source !== sourceVal) return false;
+        if (!q) return true;
+        return (a.title && a.title.toLowerCase().includes(q)) ||
+               (a.snippet && a.snippet.toLowerCase().includes(q));
+      });
+
+      totalPages = Math.ceil(filteredArticles.length / ARTICLES_PER_PAGE);
+      if (currentPage > totalPages) currentPage = totalPages || 1;
+    }
+
+    function getCurrentPageArticles() {
+      const start = (currentPage - 1) * ARTICLES_PER_PAGE;
+      return filteredArticles.slice(start, start + ARTICLES_PER_PAGE);
+    }
+
+    function render() {
+      loadingEl.style.display = 'none';
+      errorEl.style.display = 'none';
+      listEl.innerHTML = '';
+      filterArticles();
+      countEl.textContent = `${filteredArticles.length} articles shown`;
+      if (filteredArticles.length === 0) {
+        listEl.innerHTML = '<div class="empty">No articles found for selected filters.</div>';
+        paginationEl.style.display = 'none';
+        return;
+      }
+      populateSources();
+      getCurrentPageArticles().forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        if(a.image){
+          const img = document.createElement('img');
+          img.className = 'thumb';
+          img.src = a.image;
+          img.alt = a.title;
+          img.onerror = ()=>img.remove();
+          card.appendChild(img);
+        }
+        const body = document.createElement('div'); body.style.flex='1';
+        const meta = document.createElement('div'); meta.className='meta';
+        meta.textContent = `${a.source || 'Unknown'} • ${formatDate(a.date)}`;
+        body.appendChild(meta);
+        const h = document.createElement('h3'); h.className='title';
+        const link = document.createElement('a'); link.className='title-link';
+        link.href=a.link||'#'; link.target='_blank'; link.rel='noopener noreferrer';
+        link.textContent=a.title||'(No title)'; h.appendChild(link); body.appendChild(h);
+        if(a.author){ const authorEl=document.createElement('div'); authorEl.className='meta'; authorEl.textContent=`By ${a.author}`; body.appendChild(authorEl); }
+        if(a.snippet){ const sn=document.createElement('div'); sn.className='snippet'; sn.innerText=a.snippet; body.appendChild(sn); }
+        if(a.scraped_at){ const scrapedEl=document.createElement('div'); scrapedEl.className='scraped-info'; scrapedEl.textContent=`Scraped: ${formatDate(a.scraped_at)}`; body.appendChild(scrapedEl); }
+        card.appendChild(body);
+        listEl.appendChild(card);
+      });
+      renderPagination();
+    }
+
+    function renderPagination() {
+      if(totalPages <= 1){ paginationEl.style.display='none'; return; }
+      paginationEl.style.display='flex'; paginationEl.innerHTML='';
+      const prev = document.createElement('button'); prev.innerHTML='&laquo; Prev';
+      prev.disabled = currentPage === 1; prev.addEventListener('click', ()=>{ currentPage--; render(); });
+      paginationEl.appendChild(prev);
+      const pageInfo = document.createElement('div'); pageInfo.className='page-info';
+      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`; paginationEl.appendChild(pageInfo);
+      const next = document.createElement('button'); next.innerHTML='Next &raquo;';
+      next.disabled = currentPage === totalPages; next.addEventListener('click', ()=>{ currentPage++; render(); });
+      paginationEl.appendChild(next);
+    }
+
+    function formatDate(ds){ if(!ds) return ''; try{ const d=new Date(ds); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }catch(e){return ds;} }
+    function populateSources(){ const sources=[...new Set(articles.map(a=>a.source).filter(Boolean))].sort(); const cur=sourceFilter.value;
+      sourceFilter.innerHTML='<option value="">All sources</option>'+sources.map(s=>`<option value="${escapeHtml(s)}"${s===cur?' selected':''}>${escapeHtml(s)}</option>`).join('');
+    }
+    function escapeHtml(s){ return (s+'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+    searchInput.addEventListener('input',()=>{ currentPage=1; render(); });
+    sourceFilter.addEventListener('change',()=>{ currentPage=1; render(); });
+    applyDateFilterBtn.addEventListener('click', ()=>{
+      customStartDate = startDateInput.value || null;
+      customEndDate = endDateInput.value || null;
+      currentPage = 1;
+      render();
+    });
+
+    fetchSheet();
+  </script>
+</body>
+</html>

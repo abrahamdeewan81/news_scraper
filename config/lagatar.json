@@ -1,0 +1,13 @@
+{
+  "site": "lagatar",
+  "base_url": "https://lagatar.in/category/jharkhand",
+  "article": {
+    "container": "article.post",
+    "title": "h3 a.text-none",
+    "link": "h3 a.text-none",
+    "image": "figure.featured-image img.media-cover",
+    "author": ".post-author a.text-black",
+    "date": ".post-date span",
+    "snippet": "p.fs-6"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "site": "HPBL",
+  "base_url": "https://www.hpbl.co.in/category/jharkhand/",
+  "article": {
+    "container": "li.post-item, .post-item-widget, div.mag-box-container article, div.mag-box-content article",
+    
+    "title": "h2.post-title a",
+    "link": "h2.post-title a",
+    "image": ".post-thumb img.wp-post-image",
+    "author": ".meta-author .author-name",
+    "date": "span.date.meta-item",
+    "snippet": "p.post-excerpt"
+  }
+}
