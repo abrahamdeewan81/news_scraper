@@ -1,0 +1,14 @@
+{
+  "site": "joharlive",
+  "base_url": "https://www.joharlive.com/news/category/jharkhand-hindi-news/",
+  "article": {
+    "container": "article.l-post.grid-post.grid-card-post",
+    "title": "h2.post-title a",
+    "link": "h2.post-title a",
+    "image": "a.image-link span.img",
+    "author": ".post-author a",
+    "date": "time.post-date",
+    "snippet": "div.excerpt p"
+  },
+  "limit": 20
+}

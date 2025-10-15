@@ -1,0 +1,13 @@
+{
+  "site": "thenewspost",
+  "base_url": "https://thenewspost.in/Jharkhand",
+  "article": {
+    "container": "div.business-post-item",
+    "title": "h3.title a",
+    "link": "h3.title a",
+    "image": ".business-post-thumb img",
+    "author": null,
+    "date": ".meta-date span",
+    "snippet": null
+  }
+}
