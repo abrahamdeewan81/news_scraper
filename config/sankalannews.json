@@ -1,0 +1,13 @@
+{
+  "site": "Sankalan News",
+  "base_url": "https://sankalannews.com",
+  "article": {
+    "container": "article.post-wrap.post-classic-1",
+    "title": "h2.post-title.entry-title a.post-title-link",
+    "link": "h2.post-title.entry-title a.post-title-link",
+    "image": ".post-thumb img.wp-post-image",
+    "author": ".meta-info-author a.url.fn.n",
+    "date": ".meta-info-date time.published",
+    "snippet": "div.post-excerpt"
+  }
+}
