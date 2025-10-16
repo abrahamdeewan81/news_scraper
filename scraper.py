@@ -48,7 +48,7 @@ sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
 
 # ---------------- EXISTING LINKS ----------------
 def load_existing_links():
-    """Fetch all links from Google Sheet."""
+    """Fetch only last 2 days of links from Google Sheet to speed up duplicate checking."""
     try:
         rows = sheet.get_all_values()
     except APIError as e:
@@ -56,9 +56,31 @@ def load_existing_links():
         return set()
 
     links = set()
+    cutoff_date = now_ist() - timedelta(days=2)
+
     for row in rows[1:]:
+        # Assuming the date is stored in column index 2 (3rd column) → 'date_text'
+        # and link in index 3 (4th column)
         if len(row) > 3 and row[3].strip():
-            links.add(row[3].strip().rstrip("/"))
+            date_str = row[2].strip() if len(row) > 2 else ""
+            link = row[3].strip().rstrip("/")
+
+            # Parse date to filter recent rows
+            try:
+                if date_str:
+                    dt = dateutil.parser.parse(date_str)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=IST)
+                else:
+                    dt = None
+            except Exception:
+                dt = None
+
+            # Keep link only if published in last 2 days or date missing (safe fallback)
+            if not dt or dt >= cutoff_date:
+                links.add(link)
+
+    print(f"✅ Loaded {len(links)} recent links (last 2 days) from sheet")
     return links
 
 existing_links = load_existing_links()
@@ -200,9 +222,15 @@ class SheetNewsScraper:
 
         image = None
         if image_el:
-            src = image_el.get_attribute("src") or image_el.get_attribute("data-src")
-            if src:
+            src = (
+                image_el.get_attribute("src") or 
+                image_el.get_attribute("data-src") or
+                image_el.get_attribute("data-lazy-src") or
+                image_el.get_attribute("srcset")
+            )
+            if src and not src.startswith("data:"):
                 image = urljoin(base_url, src.strip())
+        image_el = q(selectors.get("image", ""))
 
         published_date = None
         if date_el:
