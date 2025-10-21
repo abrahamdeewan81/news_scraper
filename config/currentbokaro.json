@@ -1,0 +1,13 @@
+{
+  "site": "Current Bokaro",
+  "base_url": "https://currentbokaro.com/",
+  "article": {
+    "container": "div.p-wrap.p-grid",
+    "title": "h2.entry-title a.p-url",
+    "link": "h2.entry-title a.p-url",
+    "image": ".feat-holder img.featured-img",
+    "author": "",
+    "date": "time.updated",
+    "snippet": ""
+  }
+}
