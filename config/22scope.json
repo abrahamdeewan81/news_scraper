@@ -1,0 +1,13 @@
+{
+  "site": "22Scope",
+  "base_url": "https://22scope.com/category/jharkhand/",
+  "article": {
+    "container": "div.td-block-span4 div.td_module_wrap",
+    "title": "h3.entry-title a",
+    "link": "h3.entry-title a",
+    "image": ".td-module-thumb a.td-image-wrap img.entry-thumb",
+    "author": ".td-post-author-name a",
+    "date": "time.entry-date",
+    "snippet": ".td-excerpt"
+  }
+}

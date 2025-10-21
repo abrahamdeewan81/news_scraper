@@ -4,7 +4,7 @@ import json
 from urllib.parse import urljoin
 
 # Load config JSON
-with open("config/townpost.json", "r", encoding="utf-8") as f:
+with open("config/22scope.json", "r", encoding="utf-8") as f:
     config = json.load(f)
 
 site = config["site"]
