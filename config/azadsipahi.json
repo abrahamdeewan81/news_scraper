@@ -1,0 +1,13 @@
+{
+  "site": "Azad Sipahi",
+  "base_url": "https://azadsipahi.in/category/jharkhand-news/",
+  "article": {
+    "container": "article.l-post.grid-post",
+    "title": "h2.post-title a",
+    "link": "h2.post-title a",
+    "image": ".media a.image-link span.img",
+    "author": ".post-author a",
+    "date": "time.post-date",
+    "snippet": ".excerpt p"
+  }
+}
