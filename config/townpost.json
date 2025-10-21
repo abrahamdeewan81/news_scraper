@@ -1,0 +1,13 @@
+{
+  "site": "Town Post",
+  "base_url": "https://townpost.net/category/news/jharkhand/",
+  "article": {
+    "container": "div.td_module_flex.td_module_wrap",
+    "title": "h3.entry-title a",
+    "link": "h3.entry-title a",
+    "image": ".td-module-thumb a.td-image-wrap span.entry-thumb",
+    "author": "",
+    "date": "time.entry-date",
+    "snippet": ".td-excerpt"
+  }
+}
