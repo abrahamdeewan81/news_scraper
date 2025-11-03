@@ -1,13 +1,13 @@
 {
   "site": "khabar24live",
-  "base_url": "https://www.khabar24live.com/jharkhand",
+  "base_url": "https://www.khabar24live.com/jharkhand/",
   "article": {
-    "container": "div.entry-image + div.entry-details",
+    "container": "article.wpi-post",
     "title": "h2.entry-title a",
     "link": "h2.entry-title a",
-    "image": "div.entry-image img.wp-post-image",
-    "author": ".entry-meta.entry-author a",
-    "date": "time.entry-date.published",
+    "image": "div.entry-image a.post-thumbnail img.wp-post-image",
+    "author": "div.entry-meta.entry-author a.text-decoration-reset",
+    "date": "div.entry-meta.entry-date time.entry-date.published",
     "snippet": "div.entry-content-excerpt p"
   }
 }
