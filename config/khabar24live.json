@@ -1,0 +1,13 @@
+{
+  "site": "khabar24live",
+  "base_url": "https://www.khabar24live.com/jharkhand",
+  "article": {
+    "container": "div.entry-image + div.entry-details",
+    "title": "h2.entry-title a",
+    "link": "h2.entry-title a",
+    "image": "div.entry-image img.wp-post-image",
+    "author": ".entry-meta.entry-author a",
+    "date": "time.entry-date.published",
+    "snippet": "div.entry-content-excerpt p"
+  }
+}
