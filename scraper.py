@@ -176,50 +176,24 @@ class SheetNewsScraper:
         selectors = config["article"]
         limit = config.get("limit", 20)
         articles = []
-
         with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage"]
-            )
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
             page = browser.new_page()
             try:
-                print(f"🚀 Starting: {base_url}")
-                page.goto(base_url, wait_until="networkidle", timeout=60000)
-
-                # Try waiting for visible elements
-                try:
-                    page.wait_for_selector(
-                        selectors["container"],
-                        timeout=30000,
-                        state="visible"
-                    )
-                except Exception:
-                    print(f"⚠️ Selector not visibly ready: {selectors['container']} — waiting 3s extra...")
-                    time.sleep(3)
-
+                page.goto(base_url, wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_selector(selectors["container"], timeout=10000)
                 elements = page.query_selector_all(selectors["container"])
-                print(f"🔍 Found {len(elements)} elements using selector: {selectors['container']}")
-
+                print(f"🔍 Found {len(elements)} elements")
                 for el in elements[:limit]:
                     data = self.extract_article(el, base_url, config)
-
-                    # Skip if invalid
-                    if not self.is_valid(data):
-                        continue
-
-                    # Skip if older than cutoff
-                    if data.get("published_date") and data["published_date"] < self.cutoff_time:
-                        continue
-
-                    articles.append(data)
-
+                    if self.is_valid(data):
+                        if data.get("published_date") and data["published_date"] < self.cutoff_time:
+                            continue
+                        articles.append(data)
             except Exception as e:
                 print(f"⚠️ Scrape error for {base_url}: {e}")
             finally:
                 browser.close()
-
-        print(f"📊 {config['site']}: found={len(articles)} | saved={len(articles)}")
         return articles
 
     def extract_article(self, el, base_url, config):
