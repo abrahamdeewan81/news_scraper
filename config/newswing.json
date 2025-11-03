@@ -1,0 +1,13 @@
+{
+  "site": "newswing",
+  "base_url": "https://newswing.com/category/jharkhand/",
+  "article": {
+    "container": "li.post-item",
+    "title": "h2.post-title a",
+    "link": "h2.post-title a",
+    "image": "a.post-thumb img.wp-post-image",
+    "author": "span.meta-author a.author-name",
+    "date": "span.date.meta-item",
+    "snippet": "p.post-excerpt"
+  }
+}
