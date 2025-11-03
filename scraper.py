@@ -181,9 +181,16 @@ class SheetNewsScraper:
             page = browser.new_page()
             try:
                 page.goto(base_url, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_selector(selectors["container"], timeout=10000)
+
+                # Try waiting for at least one match, not necessarily visible
+                try:
+                    page.wait_for_selector(selectors["container"], timeout=15000, state="attached")
+                except Exception:
+                    print(f"⚠️ Selector not visibly ready: {selectors['container']} — continuing anyway.")
+
                 elements = page.query_selector_all(selectors["container"])
-                print(f"🔍 Found {len(elements)} elements")
+                print(f"🔍 Found {len(elements)} elements using selector: {selectors['container']}")
+
                 for el in elements[:limit]:
                     data = self.extract_article(el, base_url, config)
                     if self.is_valid(data):
