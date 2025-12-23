@@ -1,0 +1,13 @@
+{
+  "site": "etvbharat",
+  "base_url": "https://www.etvbharat.com/hi/jharkhand/!state",
+  "article": {
+    "container": ".listingcomponent__grid .category-card",
+    "title": ".category-card__title p",
+    "link": ".category-card__title",
+    "image": ".category-card__media img",
+    "author": ".category-card__author-link",
+    "date": ".category-card__date-author",
+    "snippet": ".category-card__title p"
+  }
+}
