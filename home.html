@@ -251,8 +251,14 @@ function renderPagination(){
 
   const next = document.createElement('button'); next.innerHTML='Next &raquo;';
   next.disabled = currentPage===totalPages;
-  next.addEventListener('click', ()=>{ currentPage++; render(); });
+  next.addEventListener('click', ()=> changePage(currentPage + 1));
   paginationEl.appendChild(next);
+}
+
+function changePage(p){
+  currentPage = p;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ----------- Helpers -------------
