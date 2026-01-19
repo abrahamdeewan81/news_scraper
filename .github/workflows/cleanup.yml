@@ -1,0 +1,26 @@
+name: Cleanup Old Articles
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      GSHEET_CREDS: ${{ secrets.GSHEET_CREDS }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install gspread oauth2client python-dateutil
+
+      - name: Run cleanup
+        run: python cleanup_old_articles.py
