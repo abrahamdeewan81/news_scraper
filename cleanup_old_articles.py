@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 """
 cleanup_old_articles.py
-Deletes Google Sheet rows older than N days using batchUpdate (single write)
+Archives old rows to 'Archive' sheet and deletes them safely in one batch update.
 """
 
 import os
@@ -12,8 +13,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # ---------------- CONFIG ----------------
 SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"
+MAIN_SHEET_NAME = "Sheet1"
+ARCHIVE_SHEET_NAME = "Archive"
 MAX_AGE_DAYS = 3
-DATE_COL_INDEX = 2  # Column C (0-based)
+DATE_COL_INDEX = 2  # 0-based (Column C)
 # ---------------------------------------
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -35,15 +38,22 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 gc = gspread.authorize(creds)
 
 spreadsheet = gc.open_by_key(SPREADSHEET_ID)
-sheet = spreadsheet.sheet1
-worksheet_id = sheet._properties["sheetId"]
+main_sheet = spreadsheet.worksheet(MAIN_SHEET_NAME)
+worksheet_id = main_sheet._properties["sheetId"]
+
+# Ensure archive sheet exists
+try:
+    archive_sheet = spreadsheet.worksheet(ARCHIVE_SHEET_NAME)
+except gspread.WorksheetNotFound:
+    archive_sheet = spreadsheet.add_worksheet(
+        title=ARCHIVE_SHEET_NAME,
+        rows="1000",
+        cols="20"
+    )
+    archive_sheet.append_row(main_sheet.row_values(1))  # copy headers
 
 # ---------------- HELPERS ----------------
 def merge_contiguous_rows(rows):
-    """
-    Convert [2,3,4,7,8] → [(2,5), (7,9)]
-    (Google API endIndex is exclusive)
-    """
     if not rows:
         return []
 
@@ -63,15 +73,19 @@ def merge_contiguous_rows(rows):
 
 # ---------------- CLEANUP ----------------
 def cleanup_old_articles():
-    rows = sheet.get_all_values()
-    if len(rows) <= 1:
+    rows = main_sheet.get_all_values()
+    total_rows = len(rows)
+
+    if total_rows <= 1:
         print("ℹ️ No data rows found")
         return
 
     cutoff = now_ist() - timedelta(days=MAX_AGE_DAYS)
-    rows_to_delete = []
 
-    for idx, row in enumerate(rows[1:], start=2):  # Sheet rows start at 1
+    rows_to_delete_idx = []
+    rows_to_archive = []
+
+    for sheet_row_num, row in enumerate(rows[1:], start=2):
         if len(row) <= DATE_COL_INDEX:
             continue
 
@@ -87,30 +101,38 @@ def cleanup_old_articles():
             continue
 
         if dt < cutoff:
-            rows_to_delete.append(idx - 1)  # API is 0-based
+            rows_to_delete_idx.append(sheet_row_num - 1)  # 0-based
+            rows_to_archive.append(row)
 
-    if not rows_to_delete:
-        print("✅ No articles older than 3 days")
+    if not rows_to_delete_idx:
+        print("✅ No rows older than threshold")
         return
 
-    ranges = merge_contiguous_rows(rows_to_delete)
+    # -------- ARCHIVE (single write) --------
+    archive_sheet.append_rows(rows_to_archive, value_input_option="RAW")
+    print(f"📦 Archived {len(rows_to_archive)} rows")
+
+    # -------- DELETE (single batch) --------
+    delete_ranges = merge_contiguous_rows(rows_to_delete_idx)
+    delete_ranges.sort(reverse=True)  # CRITICAL
 
     requests = []
-    for start, end in ranges:
+    for start, end in delete_ranges:
+        if start >= total_rows:
+            continue
         requests.append({
             "deleteDimension": {
                 "range": {
                     "sheetId": worksheet_id,
                     "dimension": "ROWS",
                     "startIndex": start,
-                    "endIndex": end
+                    "endIndex": min(end, total_rows)
                 }
             }
         })
 
     spreadsheet.batch_update({"requests": requests})
-
-    print(f"🧹 Deleted {len(rows_to_delete)} rows in ONE batch request")
+    print(f"🧹 Deleted {len(rows_to_delete_idx)} rows safely")
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
