@@ -4,7 +4,7 @@ import json
 from urllib.parse import urljoin
 
 # Load config
-with open("config/hindustan.json", "r", encoding="utf-8") as f:
+with open("config/hnbokaro.json", "r", encoding="utf-8") as f:
     config = json.load(f)
 
 site = config["site"]
@@ -77,11 +77,21 @@ async def scrape_js_site():
                     return None
                 el = await article.query_selector(selector)
                 return await el.get_attribute(attr) if el else None
-
-            image = (
-                await safe_attr(selectors.get("image"), "data-bgsrc")
-                or await safe_attr(selectors.get("image"), "src")
-            )
+            # Updated Image Extraction Logic
+            image_el = await article.query_selector(selectors.get("image"))
+            image = None
+            if image_el:
+                # Check these attributes in order of priority for lazy-loaded sites
+                image = (
+                    await image_el.get_attribute("src") or 
+                    await image_el.get_attribute("data-src") or 
+                    await image_el.get_attribute("data-bgsrc") or
+                    await image_el.get_attribute("srcset")
+                )
+            # image = (
+            #     await safe_attr(selectors.get("image"), "data-bgsrc")
+            #     or await safe_attr(selectors.get("image"), "src")
+            # )
 
             title = await safe_text(selectors.get("title"))
             link = await safe_attr(selectors.get("link"), "href")

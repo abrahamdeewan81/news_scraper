@@ -1,0 +1,13 @@
+{
+  "site": "jagran_jharkhand",
+  "base_url": "https://www.jagran.com/jharkhand",
+  "article": {
+    "container": "section.Topp1Section ul li.Editorial_CardStory__xBgtk",
+    "title": "article p a",
+    "link": "figure a",
+    "image": "img[src*='jagranimages.com']",
+    "author": null,
+    "date": "div.timestemp span.grey",
+    "snippet": "article p a"
+  }
+}

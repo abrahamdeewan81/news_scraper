@@ -4,7 +4,7 @@ import json
 from urllib.parse import urljoin
 
 # Load config JSON
-with open("config/hindustan.json", "r", encoding="utf-8") as f:
+with open("config/hnbokaro.json", "r", encoding="utf-8") as f:
     config = json.load(f)
 
 site = config["site"]
@@ -16,6 +16,7 @@ print("=" * 60)
 
 # Fetch page
 response = requests.get(base_url, timeout=15)
+print(response.text)
 soup = BeautifulSoup(response.text, "html.parser")
 
 # Find all article containers
