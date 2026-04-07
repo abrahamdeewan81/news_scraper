@@ -63,7 +63,7 @@
 const SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"; 
 const SHEET_GID = "0"; 
 const ARTICLES_PER_PAGE = 50;
-const INITIAL_ARTICLES_LIMIT = 100;
+const INITIAL_ARTICLES_LIMIT = 200;
 
 const CORS_PROXIES = [
   'https://api.codetabs.com/v1/proxy?quest=',
@@ -235,6 +235,13 @@ function render(){
   renderPagination();
 }
 
+function scrollToTop(){
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+}
+
 function renderPagination(){
   totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
   if(totalPages<=1){ paginationEl.style.display='none'; return; }
@@ -242,7 +249,11 @@ function renderPagination(){
   paginationEl.style.display='flex'; paginationEl.innerHTML='';
   const prev = document.createElement('button'); prev.innerHTML='&laquo; Prev';
   prev.disabled = currentPage===1;
-  prev.addEventListener('click', ()=>{ currentPage--; render(); });
+  prev.addEventListener('click', ()=>{
+      currentPage--;
+      render();
+      scrollToTop();
+    });
   paginationEl.appendChild(prev);
 
   const pageInfo = document.createElement('div'); pageInfo.className='page-info';
@@ -251,7 +262,11 @@ function renderPagination(){
 
   const next = document.createElement('button'); next.innerHTML='Next &raquo;';
   next.disabled = currentPage===totalPages;
-  next.addEventListener('click', ()=>{ currentPage++; render(); });
+  next.addEventListener('click', ()=>{
+      currentPage++;
+      render();
+      scrollToTop();
+  });
   paginationEl.appendChild(next);
 }
 
