@@ -175,9 +175,10 @@ function parseGViz(data){
           (published && !isNaN(published)) ? published.getTime() : 0;
 });
   // Sort by newest first
-  allArticles.sort((a,b)=>b._ts - a._ts);
+  allArticles.reverse();
 
   // Show only latest 100 articles initially
+  
   displayedArticles = allArticles.slice(0, INITIAL_ARTICLES_LIMIT);
 
   render();
