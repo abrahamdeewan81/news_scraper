@@ -132,6 +132,23 @@ async function fetchSheet(){
   }
 }
 
+function parseSheetDate(value){
+  if(!value) return null;
+
+  // If already a normal date string
+  if(typeof value === "string" && !value.startsWith("Date(")){
+    return new Date(value);
+  }
+
+  // Handle Google Sheets Date(YYYY,MM,DD,HH,MM,SS)
+  if(typeof value === "string" && value.startsWith("Date(")){
+    const parts = value.match(/\d+/g).map(Number);
+    return new Date(parts[0], parts[1], parts[2], parts[3]||0, parts[4]||0, parts[5]||0);
+  }
+
+  return new Date(value);
+}
+    
 // ----------- Parse GViz data -------------
 function parseGViz(data){
   const rows = data.table.rows || [];
@@ -150,7 +167,13 @@ function parseGViz(data){
   }).filter(a=>a.title||a.snippet);
 
   // Assign timestamps
-  allArticles.forEach(a=>a._ts = Date.parse(a.scraped_at)||Date.parse(a.date)||0);
+  allArticles.forEach(a=>{
+  const scraped = parseSheetDate(a.scraped_at);
+  const published = parseSheetDate(a.date);
+
+  a._ts = (scraped && !isNaN(scraped)) ? scraped.getTime() :
+          (published && !isNaN(published)) ? published.getTime() : 0;
+});
   // Sort by newest first
   allArticles.sort((a,b)=>b._ts - a._ts);
 
@@ -271,9 +294,14 @@ function renderPagination(){
 }
 
 // ----------- Helpers -------------
-function formatDate(ds){ 
+function formatDate(ds){
   if(!ds) return '';
-  try{ const d=new Date(ds); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ds; }
+
+  const d = parseSheetDate(ds);
+  if(!d || isNaN(d)) return '';
+
+  return d.toLocaleDateString() + ' ' +
+         d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 }
 
 function populateSources(){
