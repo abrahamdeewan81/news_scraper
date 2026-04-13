@@ -1,0 +1,13 @@
+{
+    "site": "Newswave Jharkhand",
+    "base_url": "https://newswavejharkhand.com/category/jharkhand/",
+    "article": {
+        "container": "div[data-elementor-type='loop-item']",
+        "title": ".elementor-widget-theme-post-title h3 a",
+        "link": ".elementor-widget-theme-post-title a",
+        "image": ".elementor-widget-theme-post-featured-image img",
+        "author": ".elementor-widget-post-info .elementor-post-info__item--type-custom",
+        "date": ".elementor-widget-post-info time",
+        "snippet": ".elementor-widget-theme-post-excerpt p"
+    }
+}
