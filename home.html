@@ -1,5 +1,4 @@
 <!doctype html>
-
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -121,6 +120,49 @@ button:disabled{
 opacity:.5;
 }
 
+/* Floating "Top" button */
+#topBtn {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 99;
+  background-color: #0b5cff;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s, transform 0.2s;
+  opacity: 0.8;
+}
+
+#topBtn:hover {
+  opacity: 1;
+  transform: scale(1.05);
+  background-color: #0947cc;
+}
+
+@media (max-width: 600px) {
+  #topBtn {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    bottom: 20px;
+    right: 20px;
+  }
+  .thumb {
+    width: 100px;
+    height: 80px;
+  }
+}
+
 </style>
 
 </head>
@@ -161,6 +203,9 @@ opacity:.5;
 
 </main>
 
+<!-- Floating Top Button -->
+<button id="topBtn" title="Go to top">↑</button>
+
 <script>
 
 const SPREADSHEET_ID="1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
@@ -187,257 +232,339 @@ let allArticles=[];
 let displayedArticles=[];
 let currentPage=1;
 
+// ========== FLOATING TOP BUTTON + SMOOTH SCROLL ==========
+const topBtn = document.getElementById("topBtn");
+
+// Function to scroll smoothly to top
+function scrollToTopSmooth() {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+}
+
+// Show/hide top button based on scroll position
+function handleTopButtonVisibility() {
+  if (window.scrollY > 300) {
+    topBtn.style.display = "flex";
+  } else {
+    topBtn.style.display = "none";
+  }
+}
+
+// Attach click event to top button
+topBtn.addEventListener("click", scrollToTopSmooth);
+window.addEventListener("scroll", handleTopButtonVisibility);
+// initial check
+handleTopButtonVisibility();
+
+// ========== DATE PARSING: handles both date_text (c[2]) and scraped_at (c[7]) ==========
+
 function parseGVizDate(v){
-
-if(!v) return null;
-
-if(v instanceof Date) return v;
-
-if(typeof v==="string" && v.startsWith("Date(")){
-
-const p=v.match(/\d+/g).map(Number);
-
-return new Date(p[0],p[1],p[2],p[3]||0,p[4]||0,p[5]||0);
-
+  if(!v) return null;
+  if(v instanceof Date) return v;
+  
+  // Handle Google Visualization API Date format: "Date(2026,3,5,12,0,0)" -> month index 3 means April (0-based)
+  if(typeof v === "string" && v.startsWith("Date(")){
+    const numbers = v.match(/\d+/g).map(Number);
+  
+    let year = numbers[0];
+    let month = numbers[1];  // already 0-indexed
+    let day = numbers[2];
+    let hour = numbers[3] || 0;
+    let minute = numbers[4] || 0;
+    let second = numbers[5] || 0;
+    return new Date(year, month, day, hour, minute, second);
+  }
+  
+  // Try standard date parsing
+  const d = new Date(v);
+  return isNaN(d) ? null : d;
 }
 
-const d=new Date(v);
-
-return isNaN(d)?null:d;
-
-}
-
+// Format date for display: returns readable string or "No date"
 function formatDate(d){
-
-if(!d) return "";
-
-return d.toLocaleDateString()+" "+d.toLocaleTimeString([],{
-hour:"2-digit",
-minute:"2-digit"
-});
-
+  if(!d) return "No date";
+  // check if valid date
+  if (isNaN(d.getTime())) return "Invalid date";
+  return d.toLocaleDateString() + " " + d.toLocaleTimeString([],{
+    hour:"2-digit",
+    minute:"2-digit"
+  });
 }
+
 
 async function loadSheet(){
-
-const res=await fetch(URL);
-
-const txt=await res.text();
-
-const json=JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
-
-const rows=json.table.rows;
-
-allArticles=rows.slice(1).map(r=>{
-
-const c=r.c.map(x=>x?x.v:"");
-
-const pub=parseGVizDate(c[2]);
-const scraped=parseGVizDate(c[7]);
-
-return{
-source:c[0],
-title:c[1],
-date:pub,
-link:c[3],
-author:c[4],
-snippet:c[5],
-image:c[6],
-scraped_at:scraped,
-_ts:(scraped||pub||0)
-};
-
-}).filter(a=>a.title);
-
-allArticles.reverse();
-
-displayedArticles=allArticles.slice(0,INITIAL_LIMIT);
-
-populateSources();
-
-render();
-
+  loadingEl.style.display = "block";
+  listEl.innerHTML = "";
+  try {
+    const res = await fetch(URL);
+    const txt = await res.text();
+    const json = JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
+    const rows = json.table.rows;
+    
+    allArticles = rows.slice(1).map(r => {
+      const c = r.c.map(x => x ? x.v : "");
+      
+      // c[2] = date_text column, c[7] = scraped_at column
+      const dateTextRaw = c[2];
+      const scrapedAtRaw = c[7];
+      
+      // Parse both dates properly
+      let parsedDateText = parseGVizDate(dateTextRaw);
+      let parsedScrapedAt = parseGVizDate(scrapedAtRaw);
+      
+      // Fallback: if date_text is empty/invalid, try to parse again from string if it's a plain string like "2026-04-05 12:00:00"
+      if (!parsedDateText && dateTextRaw && typeof dateTextRaw === "string" && dateTextRaw.trim() !== "") {
+        const fallbackDate = new Date(dateTextRaw);
+        if (!isNaN(fallbackDate)) parsedDateText = fallbackDate;
+      }
+      if (!parsedScrapedAt && scrapedAtRaw && typeof scrapedAtRaw === "string" && scrapedAtRaw.trim() !== "") {
+        const fallbackScraped = new Date(scrapedAtRaw);
+        if (!isNaN(fallbackScraped)) parsedScrapedAt = fallbackScraped;
+      }
+      
+      // Determine the date to show in the UI (priority: date_text if exists, otherwise scraped_at)
+      let displayDate = parsedDateText && !isNaN(parsedDateText.getTime()) ? parsedDateText : (parsedScrapedAt || null);
+      
+     
+      let sortDate = parsedScrapedAt && !isNaN(parsedScrapedAt.getTime()) ? parsedScrapedAt : (parsedDateText || null);
+      
+      // For backward compatibility and _ts sorting: ensure we have a timestamp for initial reverse order (scraped_at > date_text)
+      let timestamp = sortDate ? sortDate.getTime() : 0;
+      
+      return {
+        source: c[0] || "",
+        title: c[1] || "",
+        date_text_obj: parsedDateText,   // original date from article
+        date: parsedDateText,            // keep 'date' property as per existing code
+        link: c[3] || "",
+        author: c[4] || "",
+        snippet: c[5] || "",
+        image: c[6] || "",
+        scraped_at: parsedScrapedAt,
+        _ts: timestamp,                 // for reverse chronological order
+        // extra for meta display: we want to show date_text if exists, else scraped_at
+        getDisplayDateObj() {
+          return (this.date_text_obj && !isNaN(this.date_text_obj.getTime())) ? this.date_text_obj : (this.scraped_at || null);
+        }
+      };
+    }).filter(a => a.title && a.title.trim() !== ""); // filter empty titles
+    
+    
+    allArticles.sort((a,b) => b._ts - a._ts);
+    
+    // Limit to INITIAL_LIMIT as before
+    displayedArticles = allArticles.slice(0, INITIAL_LIMIT);
+    
+    populateSources();
+    render();
+  } catch(err) {
+    console.error("Error loading sheet:", err);
+    loadingEl.innerHTML = '<div class="empty">⚠️ Failed to load articles. Please check network or sheet permissions.</div>';
+    loadingEl.style.display = "block";
+  }
 }
 
 function populateSources(){
-
-const sources=[...new Set(allArticles.map(a=>a.source).filter(Boolean))].sort();
-
-sourceFilter.innerHTML='<option value="">All sources</option>'+sources.map(s=>`<option>${s}</option>`).join("");
-
+  const sources = [...new Set(allArticles.map(a => a.source).filter(Boolean))].sort();
+  sourceFilter.innerHTML = '<option value="">All sources</option>' + sources.map(s => `<option>${escapeHtml(s)}</option>`).join("");
 }
 
+// Helper to escape HTML
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+    return c;
+  });
+}
+
+// Render the article list with pagination, shows proper date logic (date_text if available else scraped_at)
 function render(){
-
-loadingEl.style.display="none";
-
-listEl.innerHTML="";
-
-const start=(currentPage-1)*ARTICLES_PER_PAGE;
-
-const page=displayedArticles.slice(start,start+ARTICLES_PER_PAGE);
-
-page.forEach(a=>{
-
-const card=document.createElement("div");
-card.className="card";
-
-if(a.image){
-
-const img=document.createElement("img");
-
-img.className="thumb";
-
-img.src=a.image;
-
-img.onerror=()=>img.remove();
-
-card.appendChild(img);
-
-}
-
-const body=document.createElement("div");
-
-const meta=document.createElement("div");
-
-meta.className="meta";
-
-meta.textContent=(a.source||"Unknown")+" • "+formatDate(a.date);
-
-body.appendChild(meta);
-
-const h=document.createElement("h3");
-
-h.className="title";
-
-const link=document.createElement("a");
-
-link.className="title-link";
-
-link.href=a.link;
-
-link.target="_blank";
-
-link.textContent=a.title;
-
-h.appendChild(link);
-
-body.appendChild(h);
-
-if(a.snippet){
-
-const sn=document.createElement("div");
-
-sn.className="snippet";
-
-sn.textContent=a.snippet;
-
-body.appendChild(sn);
-
-}
-
-if(a.scraped_at){
-
-const sc=document.createElement("div");
-
-sc.className="scraped-info";
-
-sc.textContent="Scraped: "+formatDate(a.scraped_at);
-
-body.appendChild(sc);
-
-}
-
-card.appendChild(body);
-
-listEl.appendChild(card);
-
-});
-
-countEl.textContent=displayedArticles.length+" articles";
-
-renderPagination();
-
+  loadingEl.style.display = "none";
+  listEl.innerHTML = "";
+  
+  if (displayedArticles.length === 0) {
+    listEl.innerHTML = '<div class="empty">📭 No articles match the filters.</div>';
+    countEl.textContent = "0 articles";
+    paginationEl.innerHTML = "";
+    return;
+  }
+  
+  const start = (currentPage-1) * ARTICLES_PER_PAGE;
+  const pageArticles = displayedArticles.slice(start, start + ARTICLES_PER_PAGE);
+  
+  pageArticles.forEach(a => {
+    const card = document.createElement("div");
+    card.className = "card";
+    
+    if(a.image && a.image.trim() !== ""){
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.src = a.image;
+      img.onerror = () => img.remove();
+      img.alt = "thumbnail";
+      card.appendChild(img);
+    }
+    
+    const bodyDiv = document.createElement("div");
+    bodyDiv.style.flex = "1";
+    
+    // Build meta line: source + display date (prioritize date_text, fallback scraped_at)
+    const displayDateObj = a.getDisplayDateObj ? a.getDisplayDateObj() : (a.date_text_obj || a.scraped_at);
+    const metaDateStr = formatDate(displayDateObj);
+    const sourceText = a.source && a.source.trim() !== "" ? a.source : "Unknown source";
+    
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = `${sourceText} • ${metaDateStr}`;
+    bodyDiv.appendChild(meta);
+    
+    const titleWrap = document.createElement("h3");
+    titleWrap.className = "title";
+    const link = document.createElement("a");
+    link.className = "title-link";
+    link.href = a.link && a.link.startsWith("http") ? a.link : "#";
+    link.target = "_blank";
+    link.textContent = a.title || "Untitled";
+    titleWrap.appendChild(link);
+    bodyDiv.appendChild(titleWrap);
+    
+    if(a.snippet && a.snippet.trim()){
+      const snipDiv = document.createElement("div");
+      snipDiv.className = "snippet";
+      snipDiv.textContent = a.snippet.length > 400 ? a.snippet.substring(0,400)+"…" : a.snippet;
+      bodyDiv.appendChild(snipDiv);
+    }
+    
+    // Always show scraped_at info (as per original but enhanced)
+    if(a.scraped_at && !isNaN(a.scraped_at.getTime())){
+      const scrapedDiv = document.createElement("div");
+      scrapedDiv.className = "scraped-info";
+      scrapedDiv.textContent = "📅 Scraped: " + formatDate(a.scraped_at);
+      bodyDiv.appendChild(scrapedDiv);
+    } else if(a.date_text_obj && !isNaN(a.date_text_obj.getTime())){
+      // Optionally show if only date_text exists but no scraped_at (rare but safe)
+      const scrapedDiv = document.createElement("div");
+      scrapedDiv.className = "scraped-info";
+      scrapedDiv.textContent = "📅 Published: " + formatDate(a.date_text_obj);
+      bodyDiv.appendChild(scrapedDiv);
+    }
+    
+    card.appendChild(bodyDiv);
+    listEl.appendChild(card);
+  });
+  
+  countEl.textContent = displayedArticles.length + " articles";
+  renderPagination();
+  
+ 
 }
 
 function renderPagination(){
-
-const pages=Math.ceil(displayedArticles.length/ARTICLES_PER_PAGE);
-
-paginationEl.innerHTML="";
-
-if(pages<=1) return;
-
-const prev=document.createElement("button");
-
-prev.textContent="Prev";
-
-prev.disabled=currentPage===1;
-
-prev.onclick=()=>{currentPage--;render()};
-
-paginationEl.appendChild(prev);
-
-const info=document.createElement("span");
-
-info.textContent="Page "+currentPage+" / "+pages;
-
-paginationEl.appendChild(info);
-
-const next=document.createElement("button");
-
-next.textContent="Next";
-
-next.disabled=currentPage===pages;
-
-next.onclick=()=>{currentPage++;render()};
-
-paginationEl.appendChild(next);
-
+  const totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
+  paginationEl.innerHTML = "";
+  if(totalPages <= 1) return;
+  
+  const prevBtn = document.createElement("button");
+  prevBtn.textContent = "Prev";
+  prevBtn.disabled = currentPage === 1;
+  prevBtn.onclick = () => {
+    if(currentPage > 1){
+      currentPage--;
+      render();
+      scrollToTopSmooth();   // smooth scroll to top when prev clicked
+    }
+  };
+  
+  const nextBtn = document.createElement("button");
+  nextBtn.textContent = "Next";
+  nextBtn.disabled = currentPage === totalPages;
+  nextBtn.onclick = () => {
+    if(currentPage < totalPages){
+      currentPage++;
+      render();
+      scrollToTopSmooth();   // smooth scroll to top when next clicked
+    }
+  };
+  
+  const pageSpan = document.createElement("span");
+  pageSpan.textContent = `Page ${currentPage} / ${totalPages}`;
+  pageSpan.style.padding = "0 8px";
+  
+  paginationEl.appendChild(prevBtn);
+  paginationEl.appendChild(pageSpan);
+  paginationEl.appendChild(nextBtn);
 }
 
-searchInput.addEventListener("input",filter);
-
-sourceFilter.addEventListener("change",filter);
-
-document.getElementById("applyDateFilter").addEventListener("click",filter);
 
 function filter(){
-
-const q=searchInput.value.toLowerCase();
-
-const src=sourceFilter.value;
-
-const start=startDateInput.value?new Date(startDateInput.value):new Date(0);
-
-const end=endDateInput.value?new Date(endDateInput.value):new Date();
-
-displayedArticles=allArticles.filter(a=>{
-
-if(src && a.source!==src) return false;
-
-const d=a.scraped_at||a.date;
-
-if(!d) return false;
-
-if(d<start || d>end) return false;
-
-if(!q) return true;
-
-return a.title.toLowerCase().includes(q) ||
-(a.snippet||"").toLowerCase().includes(q);
-
-});
-
-currentPage=1;
-
-render();
-
+  const query = searchInput.value.toLowerCase().trim();
+  const selectedSource = sourceFilter.value;
+  const startRaw = startDateInput.value;
+  const endRaw = endDateInput.value;
+  
+  let startDate = startRaw ? new Date(startRaw) : null;
+  let endDate = endRaw ? new Date(endRaw) : null;
+  
+  // set time to beginning of day for start, end of day for end
+  if (startDate) {
+    startDate.setHours(0,0,0,0);
+  }
+  if (endDate) {
+    endDate.setHours(23,59,59,999);
+  }
+  
+  displayedArticles = allArticles.filter(a => {
+    // Source filter
+    if (selectedSource && a.source !== selectedSource) return false;
+    
+    // Search filter (title or snippet)
+    if (query) {
+      const titleMatch = a.title.toLowerCase().includes(query);
+      const snippetMatch = (a.snippet || "").toLowerCase().includes(query);
+      if (!titleMatch && !snippetMatch) return false;
+    }
+    
+    // Date range filter: use scraped_at if available (always), otherwise date_text
+    let compareDate = a.scraped_at && !isNaN(a.scraped_at.getTime()) ? a.scraped_at : (a.date_text_obj || null);
+    if (!compareDate) return false; // No date available, skip if date filter is applied? But if both null, only include if no range.
+    // If startDate or endDate are defined, we enforce.
+    if (startDate && compareDate < startDate) return false;
+    if (endDate && compareDate > endDate) return false;
+    
+    return true;
+  });
+  
+  currentPage = 1;
+  render();
 }
+
+// Attach event listeners
+searchInput.addEventListener("input", filter);
+sourceFilter.addEventListener("change", filter);
+document.getElementById("applyDateFilter").addEventListener("click", filter);
+
+
+function setDefaultDateRange() {
+  // Not required, but we can optionally set endDate to today's date for convenience
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  endDateInput.value = `${yyyy}-${mm}-${dd}`;
+  // startDate remains empty to show all older articles by default.
+}
+
 
 loadSheet();
 
-</script>
 
+</script>
 </body>
 </html>
