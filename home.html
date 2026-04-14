@@ -280,9 +280,32 @@ function renderPagination(){
   paginationEl.appendChild(next);
 }
 
-function formatDate(ds){ 
-  if(!ds) return '';
-  try{ const d=new Date(ds); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ds; }
+// ----------- Updated Helpers -------------
+
+function formatDate(ds) { 
+  if (!ds || ds === "" || ds === "null") return "Date N/A";
+  
+  // Try to parse the date
+  let d = new Date(ds);
+  
+  // If Date is invalid, try to clean the string
+  if (isNaN(d.getTime())) {
+    // Check if it's a Google Sheets Date string like "Date(2024,3,9)"
+    const gDateMatch = ds.match(/Date\((\d+),(\d+),(\d+)\)/);
+    if (gDateMatch) {
+      // Note: JS months are 0-indexed, Google Sheets Gviz months usually are too
+      d = new Date(gDateMatch[1], gDateMatch[2], gDateMatch[3]);
+    } else {
+      // If all else fails, return the raw string so it's not "Invalid Date"
+      return ds; 
+    }
+  }
+
+  try {
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  } catch (e) {
+    return ds;
+  }
 }
 
 function populateSources(){
