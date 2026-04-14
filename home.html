@@ -370,6 +370,7 @@ function escapeHtml(str) {
 }
 
 // ========== RENDER ARTICLES WITH PAGINATION & PROPER DATE DISPLAY ==========
+// ========== RENDER ARTICLES WITH PAGINATION & PROPER DATE DISPLAY ==========
 function render() {
   if (!displayedArticles.length) {
     listEl.innerHTML = '<div class="empty">📭 No articles match your filters.</div>';
@@ -400,9 +401,12 @@ function render() {
     const contentDiv = document.createElement("div");
     contentDiv.style.flex = "1";
     
-    // Meta line: source + display date (date_text if exists, else scraped_at)
-    const displayDateObj = article.getDisplayDate();
-    const dateString = formatDate(displayDateObj);
+    // Get display date (use date if available, otherwise scraped_at)
+    let displayDate = article.date;
+    if (!displayDate || isNaN(displayDate.getTime())) {
+      displayDate = article.scraped_at;
+    }
+    const dateString = formatDate(displayDate);
     const sourceDisplay = article.source && article.source.trim() ? article.source : "Unknown source";
     
     const metaDiv = document.createElement("div");
@@ -438,12 +442,6 @@ function render() {
       scrapedDiv.className = "scraped-info";
       scrapedDiv.innerHTML = `🕸️ Scraped at: ${formatDate(article.scraped_at)}`;
       contentDiv.appendChild(scrapedDiv);
-    } else if (article.date_text_obj && !isNaN(article.date_text_obj)) {
-      // fallback: show published date if scraped missing
-      const pubDiv = document.createElement("div");
-      pubDiv.className = "scraped-info";
-      pubDiv.innerHTML = `📅 Published: ${formatDate(article.date_text_obj)}`;
-      contentDiv.appendChild(pubDiv);
     }
     
     card.appendChild(contentDiv);
@@ -493,6 +491,7 @@ function renderPagination() {
 }
 
 // ========== FILTER LOGIC (search, source, date range based on scraped_at) ==========
+
 function applyFilters() {
   const query = searchInput.value.toLowerCase().trim();
   const selectedSource = sourceFilter.value;
@@ -520,19 +519,17 @@ function applyFilters() {
       if (!titleMatch && !snippetMatch) return false;
     }
     
-    // Date range: use scraped_at as primary (most reliable), fallback to date_text if scraped missing
-    let compareDate = null;
-    if (article.scraped_at && !isNaN(article.scraped_at)) {
+    // Date range: use date (date_text) if available, otherwise scraped_at
+    let compareDate = article.date;
+    if (!compareDate || isNaN(compareDate.getTime())) {
       compareDate = article.scraped_at;
-    } else if (article.date_text_obj && !isNaN(article.date_text_obj)) {
-      compareDate = article.date_text_obj;
     }
     
     if (startDate && compareDate && compareDate < startDate) return false;
     if (endDate && compareDate && compareDate > endDate) return false;
     
-    // If date filter is active but article has no valid date, exclude it (so it doesn't pollute)
-    if ((startDate || endDate) && !compareDate) return false;
+    // If date filter is active but article has no valid date, exclude it
+    if ((startDate || endDate) && (!compareDate || isNaN(compareDate.getTime()))) return false;
     
     return true;
   });
