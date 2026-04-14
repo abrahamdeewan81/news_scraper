@@ -311,101 +311,46 @@ function formatDate(dateObj) {
 }
 
 // ========== LOAD SHEET & REVERSE ORDER (NEWEST SCRAPED AT THE TOP) ==========
-async function loadSheet() {
-  loadingEl.style.display = "block";
-  listEl.innerHTML = "";
-  
-  try {
-    const response = await fetch(URL);
-    const text = await response.text();
-    const jsonMatch = text.match(/setResponse\(([\s\S]*)\);/);
-    if (!jsonMatch) throw new Error("Invalid Google Sheets response");
-    const json = JSON.parse(jsonMatch[1]);
-    const rows = json.table.rows;
-    
-    if (!rows || rows.length < 2) {
-      loadingEl.innerHTML = '<div class="empty">📭 No articles found in the sheet.</div>';
-      return;
-    }
-    
-    // Parse rows (skip header row at index 0)
-    const rawArticles = rows.slice(1).map(row => {
-      const cells = row.c.map(cell => (cell ? cell.v : ""));
-      
-      // Column mapping based on sample: 
-      // 0: source, 1: title, 2: date_text, 3: link, 4: author, 5: snippet, 6: image_url, 7: scraped_at
-      const source = cells[0] || "";
-      const title = cells[1] || "";
-      const dateTextRaw = cells[2];
-      const link = cells[3] || "";
-      const author = cells[4] || "";
-      const snippet = cells[5] || "";
-      const imageUrl = cells[6] || "";
-      const scrapedAtRaw = cells[7];
-      
-      // Parse both dates
-      let dateTextObj = parseGVizDate(dateTextRaw);
-      let scrapedAtObj = parseGVizDate(scrapedAtRaw);
-      
-      // Additional fallback for plain string dates like "2026-04-05 12:00:00"
-      if (!dateTextObj && dateTextRaw && typeof dateTextRaw === "string" && dateTextRaw.trim()) {
-        const fallback = new Date(dateTextRaw);
-        if (!isNaN(fallback)) dateTextObj = fallback;
-      }
-      if (!scrapedAtObj && scrapedAtRaw && typeof scrapedAtRaw === "string" && scrapedAtRaw.trim()) {
-        const fallback = new Date(scrapedAtRaw);
-        if (!isNaN(fallback)) scrapedAtObj = fallback;
-      }
-      
-      // Primary timestamp for sorting: use scraped_at if available, otherwise date_text, otherwise 0
-      let sortTimestamp = 0;
-      if (scrapedAtObj && !isNaN(scrapedAtObj)) {
-        sortTimestamp = scrapedAtObj.getTime();
-      } else if (dateTextObj && !isNaN(dateTextObj)) {
-        sortTimestamp = dateTextObj.getTime();
-      }
-      
-      return {
-        source: source,
-        title: title,
-        date_text_obj: dateTextObj,
-        date: dateTextObj,           // for backward compatibility
-        link: link,
-        author: author,
-        snippet: snippet,
-        image: imageUrl,
-        scraped_at: scrapedAtObj,
-        _sortTimestamp: sortTimestamp,
-        // helper for display (prioritize date_text, else scraped_at)
-        getDisplayDate() {
-          if (this.date_text_obj && !isNaN(this.date_text_obj)) return this.date_text_obj;
-          if (this.scraped_at && !isNaN(this.scraped_at)) return this.scraped_at;
-          return null;
-        }
-      };
-    }).filter(article => article.title && article.title.trim() !== "");
-    
-    // **** CRITICAL: SORT BY SCRAPED TIMESTAMP DESCENDING (NEWEST FIRST) ****
-    // This ensures articles from the bottom of the sheet (most recent scraped_at) appear on top.
-    allArticles = rawArticles.sort((a, b) => b._sortTimestamp - a._sortTimestamp);
-    
-    // Limit to INITIAL_LIMIT for performance (keep most recent N articles)
-    if (allArticles.length > INITIAL_LIMIT) {
-      allArticles = allArticles.slice(0, INITIAL_LIMIT);
-    }
-    
-    // Initialize displayed articles with all (no filter yet)
-    displayedArticles = [...allArticles];
-    
-    populateSources();
-    render();
-    loadingEl.style.display = "none";
-    
-  } catch (error) {
-    console.error("Sheet load error:", error);
-    loadingEl.innerHTML = `<div class="empty">❌ Failed to load articles. Check network / sheet permissions.<br>${error.message}</div>`;
-    loadingEl.style.display = "block";
-  }
+async function loadSheet(){
+
+const res=await fetch(URL);
+
+const txt=await res.text();
+
+const json=JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
+
+const rows=json.table.rows;
+
+allArticles=rows.slice(1).map(r=>{
+
+const c=r.c.map(x=>x?x.v:"");
+
+const pub=parseGVizDate(c[2]);
+const scraped=parseGVizDate(c[7]);
+
+return{
+source:c[0],
+title:c[1],
+date:pub,
+link:c[3],
+author:c[4],
+snippet:c[5],
+image:c[6],
+scraped_at:scraped,
+_ts:(scraped||pub||0)
+};
+
+}).filter(a=>a.title);
+
+// SIMPLE REVERSE: display bottom rows from sheet at the top
+allArticles.reverse();
+
+displayedArticles=allArticles.slice(0,INITIAL_LIMIT);
+
+populateSources();
+
+render();
+
 }
 
 function populateSources() {
