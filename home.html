@@ -1,300 +1,310 @@
 <!doctype html>
-
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>News Monitor — Latest Articles</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <title>News Monitor — Latest Articles</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin: 0; padding: 0; background: #f7f7f9; color: #111;}
+    header {background: #0b5cff; color: #fff; padding: 14px 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);}
+    .container {max-width: 980px; margin: 18px auto; padding: 0 12px;}
+    .card {background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);}
+    .thumb {width: 160px; height: 120px; object-fit: cover; border-radius: 6px; flex: 0 0 120px;}
+    .meta {font-size: 13px; color: #666; margin-bottom: 6px;}
+    .title {font-size: 16px; margin: 0 0 6px 0; color: #111;}
+    .snippet {color: #333; font-size: 14px; line-height: 1.4;}
+    .controls {display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; align-items: center;}
+    .search, .filter, .date-input {padding: 8px 10px; border-radius: 6px; border: 1px solid #d6d6d6;}
+    .search {width: 100%; max-width: 300px;}
+    .filter, .date-input {background: #fff;}
+    .small {font-size: 12px; color: #666;}
+    a.title-link {text-decoration: none; color: inherit;}
+    .empty {text-align: center; color: #666; padding: 36px 0; background: #fff; border-radius: 8px;}
+    .error {background: #ffe6e6; color: #d00; padding: 12px; border-radius: 6px; margin: 12px 0;}
+    .scraped-info {font-size: 11px; color: #888; margin-top: 8px; border-top: 1px solid #f0f0f0; padding-top: 6px;}
+    .pagination {display: flex; justify-content: center; align-items: center; gap: 8px; margin: 20px 0; flex-wrap: wrap;}
+    .pagination button {padding: 8px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; min-width: 40px;}
+    .pagination button:hover:not(:disabled) {background: #f5f5f5;}
+    .pagination button.active {background: #0b5cff; color: white; border-color: #0b5cff;}
+    .pagination button:disabled {opacity: 0.5; cursor: not-allowed;}
+    .page-info {margin: 0 12px; font-size: 14px; color: #666;}
+    .proxy-info {font-size: 12px; color: #666; background: #f0f8ff; padding: 8px; border-radius: 4px; margin: 10px 0; text-align: center;}
+    button#applyDateFilter {padding: 8px 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;}
+    button#applyDateFilter:hover {background: #f5f5f5;}
 
-<style>
-body{font-family:system-ui;margin:0;background:#f7f7f9;}
-header{background:#0b5cff;color:#fff;padding:14px;}
-.container{max-width:980px;margin:auto;padding:12px;}
-.card{background:#fff;padding:12px;margin-bottom:12px;border-radius:8px;display:flex;gap:12px;}
-.thumb{width:120px;height:90px;object-fit:cover;border-radius:6px;}
-.meta{font-size:13px;color:#666;margin-bottom:4px;}
-.title{margin:0 0 6px;font-size:16px;}
-.snippet{font-size:14px;}
-.scraped-info{font-size:11px;color:#888;margin-top:6px;border-top:1px solid #eee;padding-top:4px;}
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-.search,.filter,.date-input{padding:8px;border:1px solid #ccc;border-radius:6px;}
-.pagination{display:flex;justify-content:center;gap:10px;margin-top:20px;}
-button{padding:8px 12px;cursor:pointer;}
-</style>
-
+    /* Back to Top Button Styles */
+    #backToTop {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      padding: 12px 16px;
+      background: #0b5cff;
+      color: white;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none; /* Hidden by default */
+      z-index: 1000;
+      font-weight: bold;
+      transition: transform 0.2s, background 0.2s;
+    }
+    #backToTop:hover {
+      background: #0046d5;
+      transform: translateY(-2px);
+    }
+  </style>
 </head>
-
 <body>
 
-<header>
-<div class="container">
-<h1 style="margin:0;">News Monitor</h1>
-</div>
-</header>
+  <header>
+    <div class="container">
+      <h1 style="margin:0;font-size:20px;">News Monitor</h1>
+      <div style="font-size:13px;opacity:0.95;">Latest scraped articles (from Google Sheet)</div>
+    </div>
+  </header>
 
-<main class="container">
+  <main class="container" id="app">
+    <div id="proxyStatus" class="proxy-info" style="display:none;"></div>
+    <div class="controls">
+      <input id="search" class="search" placeholder="Search title or snippet..." />
+      <select id="sourceFilter" class="filter"><option value="">All sources</option></select>
+      <input type="date" id="startDate" class="date-input" />
+      <input type="date" id="endDate" class="date-input" />
+      <button id="applyDateFilter">Filter</button>
+      <div style="margin-left:auto" class="small" id="count"></div>
+    </div>
 
-<div class="controls">
-<input id="search" class="search" placeholder="Search"/>
-<select id="sourceFilter" class="filter"><option value="">All sources</option></select>
-<input type="date" id="startDate" class="date-input"/>
-<input type="date" id="endDate" class="date-input"/>
-<button id="applyDateFilter">Filter</button>
-<div id="count"></div>
-</div>
+    <div id="list"></div>
+    <div id="loading" class="empty">Loading articles…</div>
+    <div id="error" class="empty" style="display:none;"></div>
+    <div id="pagination" class="pagination" style="display:none;"></div>
+  </main>
 
-<div id="list"></div>
-<div id="loading">Loading...</div>
-<div id="pagination" class="pagination"></div>
+  <button id="backToTop" title="Go to top">↑ Top</button>
 
-</main>
+  <script>
+const SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"; 
+const SHEET_GID = "0"; 
+const ARTICLES_PER_PAGE = 50;
+const INITIAL_ARTICLES_LIMIT = 100;
 
-<script>
+const CORS_PROXIES = [
+  'https://api.codetabs.com/v1/proxy?quest=',
+  'https://api.allorigins.win/raw?url=',
+  'https://api.cors.lol/?url=',
+  'https://proxy.cors.sh/',
+  'https://whateverorigin.org/get?url='
+];
+const DIRECT_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
-const SPREADSHEET_ID="1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
-const URL=`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
+const listEl = document.getElementById('list');
+const loadingEl = document.getElementById('loading');
+const errorEl = document.getElementById('error');
+const paginationEl = document.getElementById('pagination');
+const proxyStatusEl = document.getElementById('proxyStatus');
+const searchInput = document.getElementById('search');
+const sourceFilter = document.getElementById('sourceFilter');
+const countEl = document.getElementById('count');
+const startDateInput = document.getElementById('startDate');
+const endDateInput = document.getElementById('endDate');
+const applyDateFilterBtn = document.getElementById('applyDateFilter');
+const backToTopBtn = document.getElementById('backToTop');
 
-const PER_PAGE=50;
-const LIMIT=400;
+let allArticles = [];
+let displayedArticles = [];
+let filteredArticles = [];
+let currentPage = 1;
+let totalPages = 1;
+let currentProxyIndex = 0;
 
-let allArticles=[],displayedArticles=[],currentPage=1;
+let customStartDate = null;
+let customEndDate = null;
 
-const listEl=document.getElementById("list");
-const paginationEl=document.getElementById("pagination");
-const loadingEl=document.getElementById("loading");
-
-const searchInput=document.getElementById("search");
-const sourceFilter=document.getElementById("sourceFilter");
-const startDateInput=document.getElementById("startDate");
-const endDateInput=document.getElementById("endDate");
-const countEl=document.getElementById("count");
-
-/* -------- Smooth Scroll -------- */
-function scrollToTop(){
-window.scrollTo({top:0,behavior:"smooth"});
+// Helper to scroll to top smoothly
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-/* -------- Date Parsing -------- */
-function parseDate(v){
-  if(!v) return null;
-
-  // 🟢 Handle Google GViz Date(YYYY,MM,DD,...)
-  if(typeof v === "string" && v.startsWith("Date(")){
-    const parts = v.match(/\d+/g).map(Number);
-    return new Date(
-      parts[0],
-      parts[1], 
-      parts[2],
-      parts[3] || 0,
-      parts[4] || 0,
-      parts[5] || 0
-    );
+// Show/Hide Back to Top button on scroll
+window.addEventListener('scroll', () => {
+  if (window.scrollY > 300) {
+    backToTopBtn.style.display = 'block';
+  } else {
+    backToTopBtn.style.display = 'none';
   }
+});
 
-  // 🟢 Handle "YYYY-MM-DD HH:mm:ss"
-  if(typeof v === "string"){
-    const d = new Date(v.replace(" ", "T"));
-    if(!isNaN(d)) return d;
+backToTopBtn.addEventListener('click', scrollToTop);
+
+async function fetchSheet(){
+  const proxyUrl = CORS_PROXIES[currentProxyIndex] + encodeURIComponent(DIRECT_URL);
+  updateProxyStatus(`Trying proxy ${currentProxyIndex+1}/${CORS_PROXIES.length}...`);
+  try{
+    const res = await fetch(proxyUrl);
+    const text = await res.text();
+    const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
+    if(!match || !match[1]) throw new Error("Invalid response format");
+    const data = JSON.parse(match[1]);
+    if(data.status !== 'ok') throw new Error('Google API error');
+    parseGViz(data);
+  }catch(err){
+    console.error(err);
+    if(currentProxyIndex < CORS_PROXIES.length-1){
+      currentProxyIndex++;
+      setTimeout(fetchSheet, 1000);
+    } else {
+      showError('All proxies failed', err.message);
+    }
   }
-
-  // fallback
-  const d = new Date(v);
-  return isNaN(d) ? null : d;
 }
 
-function formatDate(d){
-if(!d) return "";
-return d.toLocaleDateString()+" "+
-d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+function parseGViz(data){
+  const rows = data.table.rows || [];
+  allArticles = rows.slice(1).map(r=>{
+    const v = r.c ? r.c.map(c => c ? (c.v!==null?c.v:'') : '') : [];
+    return {
+      source: v[0]||'',
+      title: v[1]||'',
+      date: v[2]||'',
+      link: v[3]||'',
+      author: v[4]||'',
+      snippet: v[5]||'',
+      image: v[6]||'',
+      scraped_at: v[7]||''
+    };
+  }).filter(a=>a.title||a.snippet);
+
+  allArticles.forEach(a=>a._ts = Date.parse(a.scraped_at)||Date.parse(a.date)||0);
+  allArticles.sort((a,b)=>b._ts - a._ts);
+  displayedArticles = allArticles.slice(0, INITIAL_ARTICLES_LIMIT);
+  render();
 }
 
-/* -------- Load Sheet -------- */
-async function load(){
-const res=await fetch(URL);
-const txt=await res.text();
-const json=JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
+function filterArticles(){
+  const q = searchInput.value.trim().toLowerCase();
+  const sourceVal = sourceFilter.value;
+  let startFilter = customStartDate ? new Date(customStartDate) : new Date(0);
+  let endFilter = customEndDate ? new Date(customEndDate) : new Date();
 
-const cols = json.table.cols.map(col => col.label.toLowerCase());
-const rows = json.table.rows;
-
-allArticles = rows.map(r => {
-  const obj = {};
-
-  r.c.forEach((cell, i) => {
-    const key = cols[i];
-    if (!key) return;
-    obj[key] = cell ? (cell.f || cell.v) : "";
+  filteredArticles = allArticles.filter(a=>{
+    const articleDate = new Date(a._ts);
+    if(articleDate < startFilter || articleDate > endFilter) return false;
+    if(sourceVal && a.source !== sourceVal) return false;
+    if(!q) return true;
+    return (a.title && a.title.toLowerCase().includes(q)) || 
+           (a.snippet && a.snippet.toLowerCase().includes(q));
   });
 
-  const pub = parseDate(obj["date_text"]);
-  const scraped = parseDate(obj["scraped_at"]);
-  console.log(obj["date_text"], obj["scraped_at"]);
-  return {
-    source: obj["source"],
-    title: obj["title"],
-    date: pub,
-    link: obj["link"],
-    snippet: obj["snippet"],
-    image: obj["image_url"],
-    scraped_at: scraped
-  };
-}).filter(a => a.title);
-
-allArticles.reverse();
-displayedArticles=allArticles.slice(0,LIMIT);
-
-populateSources();
-render();
+  currentPage=1;
+  displayedArticles = filteredArticles;
+  totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
 }
 
-/* -------- Sources -------- */
-function populateSources(){
-const sources=[...new Set(allArticles.map(a=>a.source).filter(Boolean))];
-sourceFilter.innerHTML='<option value="">All sources</option>'+
-sources.map(s=>`<option>${s}</option>`).join("");
+function getCurrentPageArticles(){
+  const start = (currentPage-1)*ARTICLES_PER_PAGE;
+  return displayedArticles.slice(start, start+ARTICLES_PER_PAGE);
 }
 
-/* -------- Render -------- */
 function render(){
+  loadingEl.style.display='none';
+  errorEl.style.display='none';
+  listEl.innerHTML='';
+  if(!displayedArticles || displayedArticles.length===0){
+    listEl.innerHTML='<div class="empty">No articles found.</div>';
+    paginationEl.style.display='none';
+    countEl.textContent='0 articles';
+    return;
+  }
 
-loadingEl.style.display="none";
-listEl.innerHTML="";
+  populateSources();
+  countEl.textContent=`${displayedArticles.length} articles shown`;
 
-const start=(currentPage-1)*PER_PAGE;
-const page=displayedArticles.slice(start,start+PER_PAGE);
+  getCurrentPageArticles().forEach(a=>{
+    const card = document.createElement('div');
+    card.className='card';
+    if(a.image){
+      const img=document.createElement('img');
+      img.className='thumb';
+      img.src=a.image;
+      img.alt=a.title;
+      img.onerror=()=>img.remove();
+      card.appendChild(img);
+    }
+    const body=document.createElement('div'); body.style.flex='1';
+    const meta=document.createElement('div'); meta.className='meta';
+    meta.textContent=`${a.source||'Unknown'} • ${formatDate(a.date)}`;
+    body.appendChild(meta);
 
-page.forEach(a=>{
+    const h=document.createElement('h3'); h.className='title';
+    const link=document.createElement('a'); link.className='title-link';
+    link.href=a.link||'#'; link.target='_blank'; link.rel='noopener noreferrer';
+    link.textContent=a.title||'(No title)';
+    h.appendChild(link); body.appendChild(h);
 
-const card=document.createElement("div");
-card.className="card";
+    if(a.author){ const auth=document.createElement('div'); auth.className='meta'; auth.textContent=`By ${a.author}`; body.appendChild(auth);}
+    if(a.snippet){ const sn=document.createElement('div'); sn.className='snippet'; sn.innerText=a.snippet; body.appendChild(sn);}
+    if(a.scraped_at){ const scr=document.createElement('div'); scr.className='scraped-info'; scr.textContent=`Scraped: ${formatDate(a.scraped_at)}`; body.appendChild(scr);}
+    card.appendChild(body);
+    listEl.appendChild(card);
+  });
 
-/* image */
-if(a.image){
-const img=document.createElement("img");
-img.className="thumb";
-img.src=a.image;
-img.onerror=()=>img.remove();
-card.appendChild(img);
+  renderPagination();
 }
 
-const body=document.createElement("div");
-
-/* meta: source + published date */
-const meta=document.createElement("div");
-meta.className="meta";
-meta.textContent=(a.source||"Unknown")+" • "+formatDate(a.date);
-body.appendChild(meta);
-
-/* title */
-const h=document.createElement("h3");
-h.className="title";
-
-const link=document.createElement("a");
-link.href=a.link;
-link.target="_blank";
-link.textContent=a.title;
-
-h.appendChild(link);
-body.appendChild(h);
-
-/* snippet */
-if(a.snippet){
-const sn=document.createElement("div");
-sn.className="snippet";
-sn.textContent=a.snippet;
-body.appendChild(sn);
-}
-
-/* scraped date at bottom */
-if(a.scraped_at){
-const sc=document.createElement("div");
-sc.className="scraped-info";
-sc.textContent="Scraped: "+formatDate(a.scraped_at);
-body.appendChild(sc);
-}
-
-card.appendChild(body);
-listEl.appendChild(card);
-
-});
-
-countEl.textContent=displayedArticles.length+" articles";
-
-renderPagination();
-}
-
-/* -------- Pagination -------- */
 function renderPagination(){
+  totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
+  if(totalPages<=1){ paginationEl.style.display='none'; return; }
 
-const total=Math.ceil(displayedArticles.length/PER_PAGE);
+  paginationEl.style.display='flex'; paginationEl.innerHTML='';
+  const prev = document.createElement('button'); prev.innerHTML='&laquo; Prev';
+  prev.disabled = currentPage===1;
+  prev.addEventListener('click', ()=>{ 
+    currentPage--; 
+    render(); 
+    scrollToTop(); 
+  });
+  paginationEl.appendChild(prev);
 
-paginationEl.innerHTML="";
+  const pageInfo = document.createElement('div'); pageInfo.className='page-info';
+  pageInfo.textContent=`Page ${currentPage} of ${totalPages}`;
+  paginationEl.appendChild(pageInfo);
 
-if(total<=1) return;
-
-const prev=document.createElement("button");
-prev.textContent="Prev";
-prev.disabled=currentPage===1;
-
-prev.onclick=()=>{
-currentPage--;
-render();
-scrollToTop();
-};
-
-paginationEl.appendChild(prev);
-
-const info=document.createElement("span");
-info.textContent="Page "+currentPage+" / "+total;
-paginationEl.appendChild(info);
-
-const next=document.createElement("button");
-next.textContent="Next";
-next.disabled=currentPage===total;
-
-next.onclick=()=>{
-currentPage++;
-render();
-scrollToTop();
-};
-
-paginationEl.appendChild(next);
+  const next = document.createElement('button'); next.innerHTML='Next &raquo;';
+  next.disabled = currentPage===totalPages;
+  next.addEventListener('click', ()=>{ 
+    currentPage++; 
+    render(); 
+    scrollToTop(); 
+  });
+  paginationEl.appendChild(next);
 }
 
-/* -------- Filter -------- */
-function filter(){
+function formatDate(ds){ 
+  if(!ds) return '';
+  try{ const d=new Date(ds); return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ds; }
+}
 
-const q=searchInput.value.toLowerCase();
-const src=sourceFilter.value;
+function populateSources(){
+  const sources = [...new Set(allArticles.map(a=>a.source).filter(Boolean))].sort();
+  const cur = sourceFilter.value;
+  sourceFilter.innerHTML='<option value="">All sources</option>'+sources.map(s=>`<option value="${escapeHtml(s)}"${s===cur?' selected':''}>${escapeHtml(s)}</option>`).join('');
+}
 
-const start=startDateInput.value?new Date(startDateInput.value):new Date(0);
-const end=endDateInput.value?new Date(endDateInput.value):new Date();
+function escapeHtml(s){ return (s+'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function updateProxyStatus(message){ proxyStatusEl.style.display='block'; proxyStatusEl.textContent=message; }
+function showError(message, details=''){ loadingEl.style.display='none'; paginationEl.style.display='none'; proxyStatusEl.style.display='none'; errorEl.style.display='block'; errorEl.innerHTML = `Error: ${message} ${details}`; }
 
-displayedArticles=allArticles.filter(a=>{
-
-if(src && a.source!==src) return false;
-
-const d=a.scraped_at||a.date;
-if(!d || d<start || d>end) return false;
-
-if(!q) return true;
-
-return a.title.toLowerCase().includes(q) ||
-(a.snippet||"").toLowerCase().includes(q);
-
+searchInput.addEventListener('input',()=>{ filterArticles(); render(); });
+sourceFilter.addEventListener('change',()=>{ filterArticles(); render(); });
+applyDateFilterBtn.addEventListener('click',()=>{
+  customStartDate = startDateInput.value || null;
+  customEndDate = endDateInput.value || null;
+  filterArticles();
+  render();
 });
 
-currentPage=1;
-render();
-}
-
-searchInput.addEventListener("input",filter);
-sourceFilter.addEventListener("change",filter);
-document.getElementById("applyDateFilter").onclick=filter;
-
-/* -------- Start -------- */
-load();
-
+fetchSheet();
 </script>
 
 </body>
