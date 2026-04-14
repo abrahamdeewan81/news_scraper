@@ -78,13 +78,26 @@ window.scrollTo({top:0,behavior:"smooth"});
 function parseDate(v){
   if(!v) return null;
 
-  // handle "YYYY-MM-DD HH:mm:ss"
+  // 🟢 Handle Google GViz Date(YYYY,MM,DD,...)
+  if(typeof v === "string" && v.startsWith("Date(")){
+    const parts = v.match(/\d+/g).map(Number);
+    return new Date(
+      parts[0],
+      parts[1], 
+      parts[2],
+      parts[3] || 0,
+      parts[4] || 0,
+      parts[5] || 0
+    );
+  }
+
+  // 🟢 Handle "YYYY-MM-DD HH:mm:ss"
   if(typeof v === "string"){
-    const d = new Date(v.replace(" ", "T") + "Z");
+    const d = new Date(v.replace(" ", "T"));
     if(!isNaN(d)) return d;
   }
 
-  // fallback: try normal parse
+  // fallback
   const d = new Date(v);
   return isNaN(d) ? null : d;
 }
@@ -115,7 +128,7 @@ allArticles = rows.map(r => {
 
   const pub = parseDate(obj["date_text"]);
   const scraped = parseDate(obj["scraped_at"]);
-
+  console.log(obj["date_text"], obj["scraped_at"]);
   return {
     source: obj["source"],
     title: obj["title"],
