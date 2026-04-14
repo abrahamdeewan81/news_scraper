@@ -5,330 +5,187 @@
   <title>News Monitor — Latest Articles</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body {font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin: 0; padding: 0; background: #f7f7f9; color: #111;}
+    body {font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; background: #f7f7f9; color: #111;}
     header {background: #0b5cff; color: #fff; padding: 14px 18px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);}
     .container {max-width: 980px; margin: 18px auto; padding: 0 12px;}
     .card {background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);}
-    .thumb {width: 160px; height: 120px; object-fit: cover; border-radius: 6px; flex: 0 0 120px;}
-    .meta {font-size: 13px; color: #666; margin-bottom: 6px;}
-    .title {font-size: 16px; margin: 0 0 6px 0; color: #111;}
-    .snippet {color: #333; font-size: 14px; line-height: 1.4;}
+    .thumb {width: 140px; height: 100px; object-fit: cover; border-radius: 6px; flex: 0 0 140px;}
+    .meta {font-size: 13px; color: #666; margin-bottom: 6px; font-weight: 500;}
+    .title {font-size: 16px; margin: 0 0 6px 0; line-height: 1.3;}
+    .snippet {color: #444; font-size: 14px; line-height: 1.5;}
     .controls {display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; align-items: center;}
     .search, .filter, .date-input {padding: 8px 10px; border-radius: 6px; border: 1px solid #d6d6d6;}
-    .search {width: 100%; max-width: 300px;}
-    .filter, .date-input {background: #fff;}
-    .small {font-size: 12px; color: #666;}
-    a.title-link {text-decoration: none; color: inherit;}
-    .empty {text-align: center; color: #666; padding: 36px 0; background: #fff; border-radius: 8px;}
-    .error {background: #ffe6e6; color: #d00; padding: 12px; border-radius: 6px; margin: 12px 0;}
-    .scraped-info {font-size: 11px; color: #888; margin-top: 8px; border-top: 1px solid #f0f0f0; padding-top: 6px;}
-    .pagination {display: flex; justify-content: center; align-items: center; gap: 8px; margin: 20px 0; flex-wrap: wrap;}
-    .pagination button {padding: 8px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; min-width: 40px;}
-    .pagination button:hover:not(:disabled) {background: #f5f5f5;}
-    .pagination button.active {background: #0b5cff; color: white; border-color: #0b5cff;}
-    .pagination button:disabled {opacity: 0.5; cursor: not-allowed;}
-    .page-info {margin: 0 12px; font-size: 14px; color: #666;}
-    .proxy-info {font-size: 12px; color: #666; background: #f0f8ff; padding: 8px; border-radius: 4px; margin: 10px 0; text-align: center;}
-    button#applyDateFilter {padding: 8px 12px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer;}
-    button#applyDateFilter:hover {background: #f5f5f5;}
-
-    /* Back to Top Button Styles */
-    #backToTop {
-      position: fixed;
-      bottom: 30px;
-      right: 30px;
-      padding: 12px 16px;
-      background: #0b5cff;
-      color: white;
-      border: none;
-      border-radius: 50px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: none; /* Hidden by default */
-      z-index: 1000;
-      font-weight: bold;
-      transition: transform 0.2s, background 0.2s;
-    }
-    #backToTop:hover {
-      background: #0046d5;
-      transform: translateY(-2px);
-    }
+    .search {flex-grow: 1; max-width: 300px;}
+    .small {font-size: 12px; color: #888;}
+    a.title-link {text-decoration: none; color: #0b5cff;}
+    a.title-link:hover {text-decoration: underline;}
+    .empty {text-align: center; color: #666; padding: 40px 0;}
+    .scraped-info {font-size: 11px; color: #aaa; margin-top: 8px; border-top: 1px solid #eee; padding-top: 6px;}
+    .pagination {display: flex; justify-content: center; align-items: center; gap: 10px; margin: 25px 0;}
+    .pagination button {padding: 8px 16px; border: 1px solid #ddd; background: #fff; border-radius: 6px; cursor: pointer;}
+    .pagination button:disabled {opacity: 0.4; cursor: not-allowed;}
+    #backToTop {position: fixed; bottom: 20px; right: 20px; padding: 10px 15px; background: #0b5cff; color: #fff; border: none; border-radius: 30px; display: none; cursor: pointer; z-index: 100;}
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="container">
-      <h1 style="margin:0;font-size:20px;">News Monitor</h1>
-      <div style="font-size:13px;opacity:0.95;">Latest scraped articles (from Google Sheet)</div>
-    </div>
-  </header>
+<header>
+  <div class="container">
+    <h1 style="margin:0;font-size:20px;">News Monitor</h1>
+    <div style="font-size:12px;opacity:0.8;">Live Feed</div>
+  </div>
+</header>
 
-  <main class="container" id="app">
-    <div id="proxyStatus" class="proxy-info" style="display:none;"></div>
-    <div class="controls">
-      <input id="search" class="search" placeholder="Search title or snippet..." />
-      <select id="sourceFilter" class="filter"><option value="">All sources</option></select>
-      <input type="date" id="startDate" class="date-input" />
-      <input type="date" id="endDate" class="date-input" />
-      <button id="applyDateFilter">Filter</button>
-      <div style="margin-left:auto" class="small" id="count"></div>
-    </div>
+<main class="container">
+  <div class="controls">
+    <input id="search" class="search" placeholder="Search news..." />
+    <select id="sourceFilter" class="filter"><option value="">All Sources</option></select>
+    <div id="count" class="small"></div>
+  </div>
 
-    <div id="list"></div>
-    <div id="loading" class="empty">Loading articles…</div>
-    <div id="error" class="empty" style="display:none;"></div>
-    <div id="pagination" class="pagination" style="display:none;"></div>
-  </main>
+  <div id="list"></div>
+  <div id="loading" class="empty">Loading...</div>
+  <div id="pagination" class="pagination"></div>
+</main>
 
-  <button id="backToTop" title="Go to top">↑ Top</button>
+<button id="backToTop">↑ Top</button>
 
-  <script>
-const SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98"; 
-const SHEET_GID = "0"; 
-const ARTICLES_PER_PAGE = 50;
-const INITIAL_ARTICLES_LIMIT = 100;
+<script>
+const SHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
+const DATA_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+// Faster, more reliable single proxy
+const PROXY = "https://api.allorigins.win/raw?url=";
 
-const CORS_PROXIES = [
-  'https://api.codetabs.com/v1/proxy?quest=',
-  'https://api.allorigins.win/raw?url=',
-  'https://api.cors.lol/?url=',
-  'https://proxy.cors.sh/',
-  'https://whateverorigin.org/get?url='
-];
-const DIRECT_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+let articles = [];
+let filtered = [];
+let page = 1;
+const perPage = 25;
 
-const listEl = document.getElementById('list');
-const loadingEl = document.getElementById('loading');
-const errorEl = document.getElementById('error');
-const paginationEl = document.getElementById('pagination');
-const proxyStatusEl = document.getElementById('proxyStatus');
-const searchInput = document.getElementById('search');
-const sourceFilter = document.getElementById('sourceFilter');
-const countEl = document.getElementById('count');
-const startDateInput = document.getElementById('startDate');
-const endDateInput = document.getElementById('endDate');
-const applyDateFilterBtn = document.getElementById('applyDateFilter');
-const backToTopBtn = document.getElementById('backToTop');
-
-let allArticles = [];
-let displayedArticles = [];
-let filteredArticles = [];
-let currentPage = 1;
-let totalPages = 1;
-let currentProxyIndex = 0;
-
-let customStartDate = null;
-let customEndDate = null;
-
-// Helper to scroll to top smoothly
-function scrollToTop() {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// Show/Hide Back to Top button on scroll
-window.addEventListener('scroll', () => {
-  if (window.scrollY > 300) {
-    backToTopBtn.style.display = 'block';
-  } else {
-    backToTopBtn.style.display = 'none';
-  }
-});
-
-backToTopBtn.addEventListener('click', scrollToTop);
-
-async function fetchSheet(){
-  const proxyUrl = CORS_PROXIES[currentProxyIndex] + encodeURIComponent(DIRECT_URL);
-  updateProxyStatus(`Trying proxy ${currentProxyIndex+1}/${CORS_PROXIES.length}...`);
-  try{
-    const res = await fetch(proxyUrl);
-    const text = await res.text();
-    const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
-    if(!match || !match[1]) throw new Error("Invalid response format");
-    const data = JSON.parse(match[1]);
-    if(data.status !== 'ok') throw new Error('Google API error');
-    parseGViz(data);
-  }catch(err){
-    console.error(err);
-    if(currentProxyIndex < CORS_PROXIES.length-1){
-      currentProxyIndex++;
-      setTimeout(fetchSheet, 1000);
-    } else {
-      showError('All proxies failed', err.message);
+// Improved Date Parser specifically for Google Gviz strings
+function formatDate(val) {
+  if (!val) return "N/A";
+  let d;
+  
+  if (typeof val === 'string' && val.includes('Date(')) {
+    const parts = val.match(/\d+/g);
+    if (parts) {
+      // Gviz months are 0-indexed: Date(2024,3,5) is April 5th
+      d = new Date(parts[0], parts[1], parts[2]);
     }
+  } else {
+    d = new Date(val);
+  }
+
+  if (isNaN(d)) return val;
+  // Return ONLY the date as requested
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(PROXY + encodeURIComponent(DATA_URL));
+    const text = await res.text();
+    const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/)[1]);
+    
+    articles = json.table.rows.slice(1).map(r => ({
+      source: r.c[0]?.v || '',
+      title: r.c[1]?.v || '',
+      date: r.c[2]?.v || '',
+      link: r.c[3]?.v || '',
+      author: r.c[4]?.v || '',
+      snippet: r.c[5]?.v || '',
+      image: r.c[6]?.v || '',
+      scraped: r.c[7]?.v || ''
+    })).filter(a => a.title);
+
+    // Sorting by date (Newest first)
+    articles.sort((a,b) => new Date(b.scraped) - new Date(a.scraped));
+    
+    populateFilters();
+    applyFilters();
+  } catch (e) {
+    document.getElementById('loading').textContent = "Error loading data.";
   }
 }
 
-function parseGViz(data){
-  const rows = data.table.rows || [];
-  allArticles = rows.slice(1).map(r=>{
-    const v = r.c ? r.c.map(c => c ? (c.v!==null?c.v:'') : '') : [];
-    return {
-      source: v[0]||'',
-      title: v[1]||'',
-      date: v[2]||'',
-      link: v[3]||'',
-      author: v[4]||'',
-      snippet: v[5]||'',
-      image: v[6]||'',
-      scraped_at: v[7]||''
-    };
-  }).filter(a=>a.title||a.snippet);
+function populateFilters() {
+  const sources = [...new Set(articles.map(a => a.source))].sort();
+  const select = document.getElementById('sourceFilter');
+  sources.forEach(s => {
+    if(!s) return;
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    select.appendChild(opt);
+  });
+}
 
-  allArticles.forEach(a=>a._ts = Date.parse(a.scraped_at)||Date.parse(a.date)||0);
-  allArticles.sort((a,b)=>b._ts - a._ts);
-  displayedArticles = allArticles.slice(0, INITIAL_ARTICLES_LIMIT);
+function applyFilters() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const s = document.getElementById('sourceFilter').value;
+  
+  filtered = articles.filter(a => {
+    const matchesSearch = a.title.toLowerCase().includes(q) || a.snippet.toLowerCase().includes(q);
+    const matchesSource = !s || a.source === s;
+    return matchesSearch && matchesSource;
+  });
+  
+  page = 1;
   render();
 }
 
-function filterArticles(){
-  const q = searchInput.value.trim().toLowerCase();
-  const sourceVal = sourceFilter.value;
-  let startFilter = customStartDate ? new Date(customStartDate) : new Date(0);
-  let endFilter = customEndDate ? new Date(customEndDate) : new Date();
-
-  filteredArticles = allArticles.filter(a=>{
-    const articleDate = new Date(a._ts);
-    if(articleDate < startFilter || articleDate > endFilter) return false;
-    if(sourceVal && a.source !== sourceVal) return false;
-    if(!q) return true;
-    return (a.title && a.title.toLowerCase().includes(q)) || 
-           (a.snippet && a.snippet.toLowerCase().includes(q));
-  });
-
-  currentPage=1;
-  displayedArticles = filteredArticles;
-  totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
-}
-
-function getCurrentPageArticles(){
-  const start = (currentPage-1)*ARTICLES_PER_PAGE;
-  return displayedArticles.slice(start, start+ARTICLES_PER_PAGE);
-}
-
-function render(){
-  loadingEl.style.display='none';
-  errorEl.style.display='none';
-  listEl.innerHTML='';
-  if(!displayedArticles || displayedArticles.length===0){
-    listEl.innerHTML='<div class="empty">No articles found.</div>';
-    paginationEl.style.display='none';
-    countEl.textContent='0 articles';
-    return;
-  }
-
-  populateSources();
-  countEl.textContent=`${displayedArticles.length} articles shown`;
-
-  getCurrentPageArticles().forEach(a=>{
+function render() {
+  const list = document.getElementById('list');
+  const loading = document.getElementById('loading');
+  loading.style.display = 'none';
+  list.innerHTML = '';
+  
+  document.getElementById('count').textContent = `${filtered.length} articles`;
+  
+  const start = (page - 1) * perPage;
+  const chunk = filtered.slice(start, start + perPage);
+  
+  chunk.forEach(a => {
     const card = document.createElement('div');
-    card.className='card';
-    if(a.image){
-      const img=document.createElement('img');
-      img.className='thumb';
-      img.src=a.image;
-      img.alt=a.title;
-      img.onerror=()=>img.remove();
-      card.appendChild(img);
-    }
-    const body=document.createElement('div'); body.style.flex='1';
-    const meta=document.createElement('div'); meta.className='meta';
-    meta.textContent=`${a.source||'Unknown'} • ${formatDate(a.date)}`;
-    body.appendChild(meta);
-
-    const h=document.createElement('h3'); h.className='title';
-    const link=document.createElement('a'); link.className='title-link';
-    link.href=a.link||'#'; link.target='_blank'; link.rel='noopener noreferrer';
-    link.textContent=a.title||'(No title)';
-    h.appendChild(link); body.appendChild(h);
-
-    if(a.author){ const auth=document.createElement('div'); auth.className='meta'; auth.textContent=`By ${a.author}`; body.appendChild(auth);}
-    if(a.snippet){ const sn=document.createElement('div'); sn.className='snippet'; sn.innerText=a.snippet; body.appendChild(sn);}
-    if(a.scraped_at){ const scr=document.createElement('div'); scr.className='scraped-info'; scr.textContent=`Scraped: ${formatDate(a.scraped_at)}`; body.appendChild(scr);}
-    card.appendChild(body);
-    listEl.appendChild(card);
+    card.className = 'card';
+    card.innerHTML = `
+      ${a.image ? `<img class="thumb" src="${a.image}" onerror="this.style.display='none'">` : ''}
+      <div style="flex:1">
+        <div class="meta">${a.source} • ${formatDate(a.date)}</div>
+        <h3 class="title"><a href="${a.link}" target="_blank" class="title-link">${a.title}</a></h3>
+        <div class="snippet">${a.snippet}</div>
+        <div class="scraped-info">Scraped on: ${formatDate(a.scraped)}</div>
+      </div>
+    `;
+    list.appendChild(card);
   });
-
+  
   renderPagination();
 }
 
-function renderPagination(){
-  totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
-  if(totalPages<=1){ paginationEl.style.display='none'; return; }
-
-  paginationEl.style.display='flex'; paginationEl.innerHTML='';
-  const prev = document.createElement('button'); prev.innerHTML='&laquo; Prev';
-  prev.disabled = currentPage===1;
-  prev.addEventListener('click', ()=>{ 
-    currentPage--; 
-    render(); 
-    scrollToTop(); 
-  });
-  paginationEl.appendChild(prev);
-
-  const pageInfo = document.createElement('div'); pageInfo.className='page-info';
-  pageInfo.textContent=`Page ${currentPage} of ${totalPages}`;
-  paginationEl.appendChild(pageInfo);
-
-  const next = document.createElement('button'); next.innerHTML='Next &raquo;';
-  next.disabled = currentPage===totalPages;
-  next.addEventListener('click', ()=>{ 
-    currentPage++; 
-    render(); 
-    scrollToTop(); 
-  });
-  paginationEl.appendChild(next);
-}
-
-// ----------- Updated Helpers -------------
-
-function formatDate(ds) { 
-  if (!ds || ds === "" || ds === "null") return "Date N/A";
+function renderPagination() {
+  const nav = document.getElementById('pagination');
+  const total = Math.ceil(filtered.length / perPage);
+  nav.innerHTML = `
+    <button id="prev" ${page === 1 ? 'disabled' : ''}>Prev</button>
+    <span>${page} / ${total || 1}</span>
+    <button id="next" ${page >= total ? 'disabled' : ''}>Next</button>
+  `;
   
-  // Try to parse the date
-  let d = new Date(ds);
-  
-  // If Date is invalid, try to clean the string
-  if (isNaN(d.getTime())) {
-    // Check if it's a Google Sheets Date string like "Date(2024,3,9)"
-    const gDateMatch = ds.match(/Date\((\d+),(\d+),(\d+)\)/);
-    if (gDateMatch) {
-      // Note: JS months are 0-indexed, Google Sheets Gviz months usually are too
-      d = new Date(gDateMatch[1], gDateMatch[2], gDateMatch[3]);
-    } else {
-      // If all else fails, return the raw string so it's not "Invalid Date"
-      return ds; 
-    }
-  }
-
-  try {
-    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-  } catch (e) {
-    return ds;
-  }
+  document.getElementById('prev').onclick = () => { page--; render(); window.scrollTo({top:0, behavior:'smooth'}); };
+  document.getElementById('next').onclick = () => { page++; render(); window.scrollTo({top:0, behavior:'smooth'}); };
 }
 
-function populateSources(){
-  const sources = [...new Set(allArticles.map(a=>a.source).filter(Boolean))].sort();
-  const cur = sourceFilter.value;
-  sourceFilter.innerHTML='<option value="">All sources</option>'+sources.map(s=>`<option value="${escapeHtml(s)}"${s===cur?' selected':''}>${escapeHtml(s)}</option>`).join('');
-}
+// Back to Top Logic
+window.onscroll = () => {
+  document.getElementById('backToTop').style.display = window.scrollY > 400 ? 'block' : 'none';
+};
+document.getElementById('backToTop').onclick = () => window.scrollTo({top:0, behavior:'smooth'});
 
-function escapeHtml(s){ return (s+'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-function updateProxyStatus(message){ proxyStatusEl.style.display='block'; proxyStatusEl.textContent=message; }
-function showError(message, details=''){ loadingEl.style.display='none'; paginationEl.style.display='none'; proxyStatusEl.style.display='none'; errorEl.style.display='block'; errorEl.innerHTML = `Error: ${message} ${details}`; }
+// Listeners
+document.getElementById('search').oninput = applyFilters;
+document.getElementById('sourceFilter').onchange = applyFilters;
 
-searchInput.addEventListener('input',()=>{ filterArticles(); render(); });
-sourceFilter.addEventListener('change',()=>{ filterArticles(); render(); });
-applyDateFilterBtn.addEventListener('click',()=>{
-  customStartDate = startDateInput.value || null;
-  customEndDate = endDateInput.value || null;
-  filterArticles();
-  render();
-});
-
-fetchSheet();
+loadData();
 </script>
-
 </body>
 </html>
