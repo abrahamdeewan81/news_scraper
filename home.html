@@ -2,553 +2,208 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>News Monitor — Latest Articles (Newest First)</title>
+<title>News Monitor — Latest Articles</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
 <style>
+body {font-family: system-ui; margin: 0; background: #f7f7f9;}
+header {background:#0b5cff;color:#fff;padding:14px 18px;}
+.container {max-width:980px;margin:18px auto;padding:0 12px;}
 
-body{
-font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial;
-margin:0;
-background:#f7f7f9;
-color:#111;
-}
+.card {background:#fff;border-radius:8px;padding:12px;margin-bottom:12px;display:flex;gap:12px;}
+.thumb {width:120px;height:90px;object-fit:cover;border-radius:6px;}
+.meta {font-size:13px;color:#666;margin-bottom:6px;}
+.title {font-size:16px;margin:0 0 6px;}
+.snippet {font-size:14px;color:#333;}
 
-header{
-background:#0b5cff;
-color:white;
-padding:14px 18px;
-}
+.controls {display:flex;gap:10px;margin:12px 0;flex-wrap:wrap;}
+.search,.filter,.date-input {padding:8px;border:1px solid #ccc;border-radius:6px;}
 
-.container{
-max-width:980px;
-margin:18px auto;
-padding:0 12px;
-}
+.pagination {display:flex;justify-content:center;gap:10px;margin:20px;}
+.pagination button {padding:8px 12px;cursor:pointer;}
 
-.card{
-background:white;
-border-radius:8px;
-padding:12px;
-margin-bottom:12px;
-display:flex;
-gap:12px;
-box-shadow:0 1px 3px rgba(0,0,0,.06);
-transition:0.1s;
-}
-
-.thumb{
-width:160px;
-height:120px;
-object-fit:cover;
-border-radius:6px;
-background:#f0f0f0;
-}
-
-.meta{
-font-size:13px;
-color:#666;
-margin-bottom:6px;
-}
-
-.title{
-font-size:16px;
-margin:0 0 6px 0;
-}
-
-.snippet{
-font-size:14px;
-line-height:1.4;
-color:#2c3e44;
-}
-
-.controls{
-display:flex;
-flex-wrap:wrap;
-gap:10px;
-margin:12px 0;
-align-items:center;
-}
-
-.search,.filter,.date-input{
-padding:8px 10px;
-border-radius:6px;
-border:1px solid #d6d6d6;
-font-size:14px;
-}
-
-.search{
-width:100%;
-max-width:300px;
-}
-
-.small{
-font-size:12px;
-color:#666;
-}
-
-a.title-link{
-text-decoration:none;
-color:inherit;
-}
-
-a.title-link:hover{
-text-decoration:underline;
-color:#0b5cff;
-}
-
-.scraped-info{
-font-size:11px;
-color:#888;
-margin-top:6px;
-border-top:1px solid #eee;
-padding-top:4px;
-}
-
-.empty{
-text-align:center;
-color:#666;
-padding:30px;
-font-style:italic;
-}
-
-.pagination{
-display:flex;
-justify-content:center;
-gap:10px;
-margin:20px 0;
-align-items:center;
-}
-
-button{
-padding:8px 12px;
-border:1px solid #ddd;
-background:white;
-border-radius:4px;
-cursor:pointer;
-transition:0.1s;
-}
-
-button:hover:not(:disabled){
-background:#f0f0f0;
-border-color:#bbb;
-}
-
-button:disabled{
-opacity:.5;
-cursor:default;
-}
-
-/* Floating "Top" button */
-#topBtn {
+#scrollTopBtn {
   position: fixed;
-  bottom: 30px;
-  right: 30px;
-  z-index: 99;
-  background-color: #0b5cff;
-  color: white;
+  bottom: 20px;
+  right: 20px;
+  background: #0b5cff;
+  color: #fff;
   border: none;
+  padding: 10px 14px;
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
-  font-size: 24px;
-  font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.2s, transform 0.2s;
-  opacity: 0.85;
+  display: none;
+  font-size: 18px;
 }
-
-#topBtn:hover {
-  opacity: 1;
-  transform: scale(1.05);
-  background-color: #0947cc;
-}
-
-@media (max-width: 600px) {
-  #topBtn {
-    width: 42px;
-    height: 42px;
-    font-size: 20px;
-    bottom: 20px;
-    right: 20px;
-  }
-  .thumb {
-    width: 100px;
-    height: 80px;
-  }
-  .card {
-    gap: 8px;
-  }
-}
-
-.badge-new {
-  background: #0b5cff10;
-  color: #0b5cff;
-  font-size: 10px;
-  border-radius: 20px;
-  padding: 2px 8px;
-  margin-left: 8px;
-  font-weight: normal;
-}
-
 </style>
-
 </head>
 
 <body>
 
 <header>
-<div class="container">
-<h1 style="margin:0;font-size:20px;">📰 News Monitor</h1>
-<div style="font-size:13px">Latest scraped articles — newest first</div>
-</div>
+  <h2>News Monitor</h2>
 </header>
 
 <main class="container">
-
 <div class="controls">
-
-<input id="search" class="search" placeholder="🔍 Search title or snippet"/>
-
-<select id="sourceFilter" class="filter">
-<option value="">All sources</option>
-</select>
-
-<input type="date" id="startDate" class="date-input" placeholder="From date"/>
-<input type="date" id="endDate" class="date-input" placeholder="To date"/>
-
-<button id="applyDateFilter">📅 Apply date filter</button>
-
-<div style="margin-left:auto" class="small" id="count"></div>
-
+<input id="search" class="search" placeholder="Search..." />
+<select id="sourceFilter" class="filter"><option value="">All sources</option></select>
+<input type="date" id="startDate" class="date-input"/>
+<input type="date" id="endDate" class="date-input"/>
+<button id="applyDateFilter">Filter</button>
 </div>
 
 <div id="list"></div>
-
-<div id="loading" class="empty">⏳ Loading articles from Google Sheet...</div>
-
 <div id="pagination" class="pagination"></div>
-
 </main>
 
-<!-- Floating Top Button -->
-<button id="topBtn" title="Scroll to top">↑</button>
+<button id="scrollTopBtn">↑</button>
 
 <script>
-
 const SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
 const SHEET_GID = "0";
-
 const ARTICLES_PER_PAGE = 50;
-const INITIAL_LIMIT = 400;   // Load up to 400 most recent articles after sorting
 
-const URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
-const listEl = document.getElementById("list");
-const loadingEl = document.getElementById("loading");
-const paginationEl = document.getElementById("pagination");
+let allArticles=[], displayedArticles=[], filteredArticles=[];
+let currentPage=1;
 
-const searchInput = document.getElementById("search");
-const sourceFilter = document.getElementById("sourceFilter");
+const listEl=document.getElementById('list');
+const paginationEl=document.getElementById('pagination');
 
-const startDateInput = document.getElementById("startDate");
-const endDateInput = document.getElementById("endDate");
+function parseSheetDate(value){
+  if(!value) return null;
 
-const countEl = document.getElementById("count");
+  if(typeof value==="string"){
+    if(value.startsWith("Date(")){
+      const p=value.match(/\d+/g).map(Number);
+      return new Date(p[0],p[1],p[2],p[3]||0,p[4]||0,p[5]||0);
+    }
+    return new Date(value);
+  }
 
-let allArticles = [];        // Master array (already sorted newest scraped first)
-let displayedArticles = [];  // Filtered version
-let currentPage = 1;
+  return new Date(value);
+}
 
-// ========== FLOATING TOP BUTTON + SMOOTH SCROLL ==========
-const topBtn = document.getElementById("topBtn");
+// fallback logic
+function resolveTimestamp(article){
+  const pub=parseSheetDate(article.date);
+  const scr=parseSheetDate(article.scraped_at);
 
-function scrollToTopSmooth() {
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
+  if(pub && !isNaN(pub)) return pub.getTime();
+  if(scr && !isNaN(scr)) return scr.getTime();
+
+  return 0;
+}
+
+function formatDate(val){
+  const d=parseSheetDate(val);
+  if(!d || isNaN(d)) return "No date";
+  return d.toLocaleString();
+}
+
+async function fetchData(){
+  const res=await fetch(url);
+  const txt=await res.text();
+  const json=JSON.parse(txt.match(/setResponse\(([\s\S]+)\)/)[1]);
+
+  allArticles=json.table.rows.slice(1).map(r=>{
+    const v=r.c.map(c=>c?c.v:"");
+    return {
+      source:v[0],
+      title:v[1],
+      date:v[2],
+      link:v[3],
+      author:v[4],
+      snippet:v[5],
+      image:v[6],
+      scraped_at:v[7]
+    };
   });
-}
 
-function handleTopButtonVisibility() {
-  if (window.scrollY > 300) {
-    topBtn.style.display = "flex";
-  } else {
-    topBtn.style.display = "none";
-  }
-}
+  // assign timestamp + sort DESC (IMPORTANT FIX)
+  allArticles.forEach(a=>a._ts=resolveTimestamp(a));
+  allArticles.sort((a,b)=>b._ts-a._ts);
 
-topBtn.addEventListener("click", scrollToTopSmooth);
-window.addEventListener("scroll", handleTopButtonVisibility);
-handleTopButtonVisibility();
-
-// ========== ROBUST DATE PARSING (handles Google Viz, strings, etc) ==========
-function parseGVizDate(value) {
-  if (!value) return null;
-  if (value instanceof Date && !isNaN(value)) return value;
-  
-  // Handle Google Visualization API format: "Date(2026,3,5,12,0,0)" (month 0-indexed)
-  if (typeof value === "string" && value.startsWith("Date(")) {
-    const numbers = value.match(/\d+/g).map(Number);
-    if (numbers.length >= 3) {
-      const [year, month, day, hour = 0, minute = 0, second = 0] = numbers;
-      return new Date(year, month, day, hour, minute, second);
-    }
-  }
-  
-  // Try standard date parsing (ISO, "2026-04-05 12:00:00", etc)
-  const parsed = new Date(value);
-  return isNaN(parsed) ? null : parsed;
-}
-
-function formatDate(dateObj) {
-  if (!dateObj || isNaN(dateObj.getTime())) return "No date";
-  return dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-// ========== LOAD SHEET & REVERSE ORDER (NEWEST SCRAPED AT THE TOP) ==========
-async function loadSheet(){
-
-const res=await fetch(URL);
-
-const txt=await res.text();
-
-const json=JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
-
-const rows=json.table.rows;
-
-allArticles=rows.slice(1).map(r=>{
-
-const c=r.c.map(x=>x?x.v:"");
-
-const pub=parseGVizDate(c[2]);
-const scraped=parseGVizDate(c[7]);
-
-return{
-source:c[0],
-title:c[1],
-date:pub,
-link:c[3],
-author:c[4],
-snippet:c[5],
-image:c[6],
-scraped_at:scraped,
-_ts:(scraped||pub||0)
-};
-
-}).filter(a=>a.title);
-
-// SIMPLE REVERSE: display bottom rows from sheet at the top
-allArticles.reverse();
-
-displayedArticles=allArticles.slice(0,INITIAL_LIMIT);
-
-populateSources();
-
-render();
-
-}
-
-function populateSources() {
-  const sources = [...new Set(allArticles.map(a => a.source).filter(Boolean))].sort();
-  sourceFilter.innerHTML = '<option value="">🌐 All sources</option>' + 
-    sources.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    return m;
-  });
-}
-
-// ========== RENDER ARTICLES WITH PAGINATION & PROPER DATE DISPLAY ==========
-// ========== RENDER ARTICLES WITH PAGINATION & PROPER DATE DISPLAY ==========
-function render() {
-  if (!displayedArticles.length) {
-    listEl.innerHTML = '<div class="empty">📭 No articles match your filters.</div>';
-    countEl.textContent = "0 articles";
-    paginationEl.innerHTML = "";
-    return;
-  }
-  
-  const startIdx = (currentPage - 1) * ARTICLES_PER_PAGE;
-  const pageArticles = displayedArticles.slice(startIdx, startIdx + ARTICLES_PER_PAGE);
-  
-  listEl.innerHTML = "";
-  
-  pageArticles.forEach(article => {
-    const card = document.createElement("div");
-    card.className = "card";
-    
-    // Thumbnail image
-    if (article.image && article.image.trim() !== "") {
-      const img = document.createElement("img");
-      img.className = "thumb";
-      img.src = article.image;
-      img.alt = "news thumbnail";
-      img.onerror = () => img.remove();
-      card.appendChild(img);
-    }
-    
-    const contentDiv = document.createElement("div");
-    contentDiv.style.flex = "1";
-    
-    // Get display date (use date if available, otherwise scraped_at)
-    let displayDate = article.date;
-    if (!displayDate || isNaN(displayDate.getTime())) {
-      displayDate = article.scraped_at;
-    }
-    const dateString = formatDate(displayDate);
-    const sourceDisplay = article.source && article.source.trim() ? article.source : "Unknown source";
-    
-    const metaDiv = document.createElement("div");
-    metaDiv.className = "meta";
-    metaDiv.innerHTML = `📰 ${escapeHtml(sourceDisplay)} • 🕒 ${dateString}`;
-    contentDiv.appendChild(metaDiv);
-    
-    // Title with link
-    const titleEl = document.createElement("h3");
-    titleEl.className = "title";
-    const link = document.createElement("a");
-    link.className = "title-link";
-    link.href = article.link && article.link.startsWith("http") ? article.link : "#";
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = article.title || "Untitled";
-    titleEl.appendChild(link);
-    contentDiv.appendChild(titleEl);
-    
-    // Snippet
-    if (article.snippet && article.snippet.trim()) {
-      const snippetDiv = document.createElement("div");
-      snippetDiv.className = "snippet";
-      let snippetText = article.snippet;
-      if (snippetText.length > 350) snippetText = snippetText.substring(0, 350) + "…";
-      snippetDiv.textContent = snippetText;
-      contentDiv.appendChild(snippetDiv);
-    }
-    
-    // Scraped timestamp info (always show when available)
-    if (article.scraped_at && !isNaN(article.scraped_at)) {
-      const scrapedDiv = document.createElement("div");
-      scrapedDiv.className = "scraped-info";
-      scrapedDiv.innerHTML = `🕸️ Scraped at: ${formatDate(article.scraped_at)}`;
-      contentDiv.appendChild(scrapedDiv);
-    }
-    
-    card.appendChild(contentDiv);
-    listEl.appendChild(card);
-  });
-  
-  countEl.textContent = `${displayedArticles.length} article${displayedArticles.length !== 1 ? 's' : ''} (newest first)`;
-  renderPagination();
-}
-
-function renderPagination() {
-  const totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
-  paginationEl.innerHTML = "";
-  
-  if (totalPages <= 1) return;
-  
-  const prevBtn = document.createElement("button");
-  prevBtn.textContent = "◀ Prev";
-  prevBtn.disabled = currentPage === 1;
-  prevBtn.onclick = () => {
-    if (currentPage > 1) {
-      currentPage--;
-      render();
-      scrollToTopSmooth();  // smooth scroll to top when prev clicked
-    }
-  };
-  
-  const nextBtn = document.createElement("button");
-  nextBtn.textContent = "Next ▶";
-  nextBtn.disabled = currentPage === totalPages;
-  nextBtn.onclick = () => {
-    if (currentPage < totalPages) {
-      currentPage++;
-      render();
-      scrollToTopSmooth();  // smooth scroll to top when next clicked
-    }
-  };
-  
-  const pageInfo = document.createElement("span");
-  pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-  pageInfo.style.fontSize = "14px";
-  pageInfo.style.padding = "0 12px";
-  
-  paginationEl.appendChild(prevBtn);
-  paginationEl.appendChild(pageInfo);
-  paginationEl.appendChild(nextBtn);
-}
-
-// ========== FILTER LOGIC (search, source, date range based on scraped_at) ==========
-
-function applyFilters() {
-  const query = searchInput.value.toLowerCase().trim();
-  const selectedSource = sourceFilter.value;
-  const startRaw = startDateInput.value;
-  const endRaw = endDateInput.value;
-  
-  let startDate = startRaw ? new Date(startRaw) : null;
-  let endDate = endRaw ? new Date(endRaw) : null;
-  
-  if (startDate) {
-    startDate.setHours(0, 0, 0, 0);
-  }
-  if (endDate) {
-    endDate.setHours(23, 59, 59, 999);
-  }
-  
-  displayedArticles = allArticles.filter(article => {
-    // Source filter
-    if (selectedSource && article.source !== selectedSource) return false;
-    
-    // Text search (title or snippet)
-    if (query) {
-      const titleMatch = article.title.toLowerCase().includes(query);
-      const snippetMatch = (article.snippet || "").toLowerCase().includes(query);
-      if (!titleMatch && !snippetMatch) return false;
-    }
-    
-    // Date range: use date (date_text) if available, otherwise scraped_at
-    let compareDate = article.date;
-    if (!compareDate || isNaN(compareDate.getTime())) {
-      compareDate = article.scraped_at;
-    }
-    
-    if (startDate && compareDate && compareDate < startDate) return false;
-    if (endDate && compareDate && compareDate > endDate) return false;
-    
-    // If date filter is active but article has no valid date, exclude it
-    if ((startDate || endDate) && (!compareDate || isNaN(compareDate.getTime()))) return false;
-    
-    return true;
-  });
-  
-  currentPage = 1;
+  displayedArticles=allArticles;
   render();
 }
 
-// ========== EVENT LISTENERS ==========
-searchInput.addEventListener("input", applyFilters);
-sourceFilter.addEventListener("change", applyFilters);
-document.getElementById("applyDateFilter").addEventListener("click", applyFilters);
+function render(){
+  listEl.innerHTML="";
 
+  const start=(currentPage-1)*ARTICLES_PER_PAGE;
+  const pageItems=displayedArticles.slice(start,start+ARTICLES_PER_PAGE);
 
-loadSheet();
+  pageItems.forEach(a=>{
+    const div=document.createElement('div');
+    div.className="card";
 
+    if(a.image){
+      const img=document.createElement('img');
+      img.src=a.image;
+      img.className="thumb";
+      div.appendChild(img);
+    }
 
-console.log("News Monitor: Articles will be shown with latest scraped_at on top (reverse order of sheet rows).");
+    const body=document.createElement('div');
 
+    const meta=document.createElement('div');
+    meta.className="meta";
+    meta.textContent=`${a.source} • ${formatDate(a.date || a.scraped_at)}`;
+
+    const title=document.createElement('h3');
+    title.className="title";
+    title.innerHTML=`<a href="${a.link}" target="_blank">${a.title}</a>`;
+
+    body.appendChild(meta);
+    body.appendChild(title);
+
+    if(a.snippet){
+      const sn=document.createElement('div');
+      sn.className="snippet";
+      sn.textContent=a.snippet;
+      body.appendChild(sn);
+    }
+
+    div.appendChild(body);
+    listEl.appendChild(div);
+  });
+
+  renderPagination();
+}
+
+function renderPagination(){
+  paginationEl.innerHTML="";
+  const total=Math.ceil(displayedArticles.length/ARTICLES_PER_PAGE);
+
+  const prev=document.createElement('button');
+  prev.textContent="Prev";
+  prev.disabled=currentPage===1;
+  prev.onclick=()=>{currentPage--;render();scrollTop();};
+
+  const next=document.createElement('button');
+  next.textContent="Next";
+  next.disabled=currentPage===total;
+  next.onclick=()=>{currentPage++;render();scrollTop();};
+
+  paginationEl.append(prev,document.createTextNode(` Page ${currentPage}/${total} `),next);
+}
+
+function scrollTop(){
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// floating button
+const btn=document.getElementById("scrollTopBtn");
+window.onscroll=()=>{
+  btn.style.display=window.scrollY>300?"block":"none";
+};
+btn.onclick=scrollTop;
+
+fetchData();
 </script>
+
 </body>
 </html>
