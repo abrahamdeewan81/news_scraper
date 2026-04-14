@@ -7,120 +7,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
 <style>
-
-body{
-font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial;
-margin:0;
-background:#f7f7f9;
-color:#111;
-}
-
-header{
-background:#0b5cff;
-color:white;
-padding:14px 18px;
-}
-
-.container{
-max-width:980px;
-margin:18px auto;
-padding:0 12px;
-}
-
-.card{
-background:white;
-border-radius:8px;
-padding:12px;
-margin-bottom:12px;
-display:flex;
-gap:12px;
-box-shadow:0 1px 3px rgba(0,0,0,.06);
-}
-
-.thumb{
-width:160px;
-height:120px;
-object-fit:cover;
-border-radius:6px;
-}
-
-.meta{
-font-size:13px;
-color:#666;
-margin-bottom:6px;
-}
-
-.title{
-font-size:16px;
-margin:0 0 6px 0;
-}
-
-.snippet{
-font-size:14px;
-line-height:1.4;
-}
-
-.controls{
-display:flex;
-flex-wrap:wrap;
-gap:10px;
-margin:12px 0;
-}
-
-.search,.filter,.date-input{
-padding:8px 10px;
-border-radius:6px;
-border:1px solid #d6d6d6;
-}
-
-.search{
-width:100%;
-max-width:300px;
-}
-
-.small{
-font-size:12px;
-color:#666;
-}
-
-a.title-link{
-text-decoration:none;
-color:inherit;
-}
-
-.scraped-info{
-font-size:11px;
-color:#888;
-margin-top:6px;
-border-top:1px solid #eee;
-padding-top:4px;
-}
-
-.empty{
-text-align:center;
-color:#666;
-padding:30px;
-}
-
-.pagination{
-display:flex;
-justify-content:center;
-gap:10px;
-margin:20px 0;
-}
-
-button{
-padding:8px 12px;
-border:1px solid #ddd;
-background:white;
-border-radius:4px;
-cursor:pointer;
-}
-
-button:disabled{
-opacity:.5;
-}
-
+body{font-family:system-ui;margin:0;background:#f7f7f9;}
+header{background:#0b5cff;color:#fff;padding:14px;}
+.container{max-width:980px;margin:auto;padding:12px;}
+.card{background:#fff;padding:12px;margin-bottom:12px;border-radius:8px;display:flex;gap:12px;}
+.thumb{width:120px;height:90px;object-fit:cover;border-radius:6px;}
+.meta{font-size:13px;color:#666;margin-bottom:4px;}
+.title{margin:0 0 6px;font-size:16px;}
+.snippet{font-size:14px;}
+.scraped-info{font-size:11px;color:#888;margin-top:6px;border-top:1px solid #eee;padding-top:4px;}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.search,.filter,.date-input{padding:8px;border:1px solid #ccc;border-radius:6px;}
+.pagination{display:flex;justify-content:center;gap:10px;margin-top:20px;}
+button{padding:8px 12px;cursor:pointer;}
 </style>
 
 </head>
@@ -129,34 +28,23 @@ opacity:.5;
 
 <header>
 <div class="container">
-<h1 style="margin:0;font-size:20px;">News Monitor</h1>
-<div style="font-size:13px">Latest scraped articles</div>
+<h1 style="margin:0;">News Monitor</h1>
 </div>
 </header>
 
 <main class="container">
 
 <div class="controls">
-
-<input id="search" class="search" placeholder="Search title or snippet"/>
-
-<select id="sourceFilter" class="filter">
-<option value="">All sources</option>
-</select>
-
+<input id="search" class="search" placeholder="Search"/>
+<select id="sourceFilter" class="filter"><option value="">All sources</option></select>
 <input type="date" id="startDate" class="date-input"/>
 <input type="date" id="endDate" class="date-input"/>
-
 <button id="applyDateFilter">Filter</button>
-
-<div style="margin-left:auto" class="small" id="count"></div>
-
+<div id="count"></div>
 </div>
 
 <div id="list"></div>
-
-<div id="loading" class="empty">Loading articles…</div>
-
+<div id="loading">Loading...</div>
 <div id="pagination" class="pagination"></div>
 
 </main>
@@ -164,192 +52,144 @@ opacity:.5;
 <script>
 
 const SPREADSHEET_ID="1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
-const SHEET_GID="0";
+const URL=`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
 
-const ARTICLES_PER_PAGE=50;
-const INITIAL_LIMIT=400;
+const PER_PAGE=50;
+const LIMIT=400;
 
-const URL=`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+let allArticles=[],displayedArticles=[],currentPage=1;
 
 const listEl=document.getElementById("list");
-const loadingEl=document.getElementById("loading");
 const paginationEl=document.getElementById("pagination");
+const loadingEl=document.getElementById("loading");
 
 const searchInput=document.getElementById("search");
 const sourceFilter=document.getElementById("sourceFilter");
-
 const startDateInput=document.getElementById("startDate");
 const endDateInput=document.getElementById("endDate");
-
 const countEl=document.getElementById("count");
 
-let allArticles=[];
-let displayedArticles=[];
-let currentPage=1;
-
-function parseGVizDate(v){
-
-if(!v) return null;
-
-if(v instanceof Date) return v;
-
-if(typeof v==="string" && v.startsWith("Date(")){
-
-const p=v.match(/\d+/g).map(Number);
-
-return new Date(p[0],p[1],p[2],p[3]||0,p[4]||0,p[5]||0);
-
+/* -------- Smooth Scroll -------- */
+function scrollToTop(){
+window.scrollTo({top:0,behavior:"smooth"});
 }
 
+/* -------- Date Parsing -------- */
+function parseDate(v){
+if(!v) return null;
+if(typeof v==="string" && v.startsWith("Date(")){
+const p=v.match(/\d+/g).map(Number);
+return new Date(p[0],p[1],p[2],p[3]||0,p[4]||0);
+}
 const d=new Date(v);
-
 return isNaN(d)?null:d;
-
 }
 
 function formatDate(d){
-
 if(!d) return "";
-
-return d.toLocaleDateString()+" "+d.toLocaleTimeString([],{
-hour:"2-digit",
-minute:"2-digit"
-});
-
+return d.toLocaleDateString()+" "+
+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
 }
 
-async function loadSheet(){
-
+/* -------- Load Sheet -------- */
+async function load(){
 const res=await fetch(URL);
-
 const txt=await res.text();
-
 const json=JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
 
 const rows=json.table.rows;
 
 allArticles=rows.slice(1).map(r=>{
-
 const c=r.c.map(x=>x?x.v:"");
 
-const pub=parseGVizDate(c[2]);
-const scraped=parseGVizDate(c[7]);
+const pub=parseDate(c[2]);
+const scraped=parseDate(c[7]);
 
 return{
 source:c[0],
 title:c[1],
 date:pub,
 link:c[3],
-author:c[4],
 snippet:c[5],
 image:c[6],
-scraped_at:scraped,
-_ts:(scraped||pub||0)
+scraped_at:scraped
 };
-
 }).filter(a=>a.title);
 
 allArticles.reverse();
-
-displayedArticles=allArticles.slice(0,INITIAL_LIMIT);
+displayedArticles=allArticles.slice(0,LIMIT);
 
 populateSources();
-
 render();
-
 }
 
+/* -------- Sources -------- */
 function populateSources(){
-
-const sources=[...new Set(allArticles.map(a=>a.source).filter(Boolean))].sort();
-
-sourceFilter.innerHTML='<option value="">All sources</option>'+sources.map(s=>`<option>${s}</option>`).join("");
-
+const sources=[...new Set(allArticles.map(a=>a.source).filter(Boolean))];
+sourceFilter.innerHTML='<option value="">All sources</option>'+
+sources.map(s=>`<option>${s}</option>`).join("");
 }
 
+/* -------- Render -------- */
 function render(){
 
 loadingEl.style.display="none";
-
 listEl.innerHTML="";
 
-const start=(currentPage-1)*ARTICLES_PER_PAGE;
-
-const page=displayedArticles.slice(start,start+ARTICLES_PER_PAGE);
+const start=(currentPage-1)*PER_PAGE;
+const page=displayedArticles.slice(start,start+PER_PAGE);
 
 page.forEach(a=>{
 
 const card=document.createElement("div");
 card.className="card";
 
+/* image */
 if(a.image){
-
 const img=document.createElement("img");
-
 img.className="thumb";
-
 img.src=a.image;
-
 img.onerror=()=>img.remove();
-
 card.appendChild(img);
-
 }
 
 const body=document.createElement("div");
 
+/* meta: source + published date */
 const meta=document.createElement("div");
-
 meta.className="meta";
-
 meta.textContent=(a.source||"Unknown")+" • "+formatDate(a.date);
-
 body.appendChild(meta);
 
+/* title */
 const h=document.createElement("h3");
-
 h.className="title";
 
 const link=document.createElement("a");
-
-link.className="title-link";
-
 link.href=a.link;
-
 link.target="_blank";
-
 link.textContent=a.title;
 
 h.appendChild(link);
-
 body.appendChild(h);
 
+/* snippet */
 if(a.snippet){
-
 const sn=document.createElement("div");
-
 sn.className="snippet";
-
 sn.textContent=a.snippet;
-
 body.appendChild(sn);
-
 }
 
+/* scraped date at bottom */
 if(a.scraped_at){
-
 const sc=document.createElement("div");
-
 sc.className="scraped-info";
-
 sc.textContent="Scraped: "+formatDate(a.scraped_at);
-
 body.appendChild(sc);
-
 }
 
 card.appendChild(body);
-
 listEl.appendChild(card);
 
 });
@@ -357,59 +197,53 @@ listEl.appendChild(card);
 countEl.textContent=displayedArticles.length+" articles";
 
 renderPagination();
-
 }
 
+/* -------- Pagination -------- */
 function renderPagination(){
 
-const pages=Math.ceil(displayedArticles.length/ARTICLES_PER_PAGE);
+const total=Math.ceil(displayedArticles.length/PER_PAGE);
 
 paginationEl.innerHTML="";
 
-if(pages<=1) return;
+if(total<=1) return;
 
 const prev=document.createElement("button");
-
 prev.textContent="Prev";
-
 prev.disabled=currentPage===1;
 
-prev.onclick=()=>{currentPage--;render()};
+prev.onclick=()=>{
+currentPage--;
+render();
+scrollToTop();
+};
 
 paginationEl.appendChild(prev);
 
 const info=document.createElement("span");
-
-info.textContent="Page "+currentPage+" / "+pages;
-
+info.textContent="Page "+currentPage+" / "+total;
 paginationEl.appendChild(info);
 
 const next=document.createElement("button");
-
 next.textContent="Next";
+next.disabled=currentPage===total;
 
-next.disabled=currentPage===pages;
-
-next.onclick=()=>{currentPage++;render()};
+next.onclick=()=>{
+currentPage++;
+render();
+scrollToTop();
+};
 
 paginationEl.appendChild(next);
-
 }
 
-searchInput.addEventListener("input",filter);
-
-sourceFilter.addEventListener("change",filter);
-
-document.getElementById("applyDateFilter").addEventListener("click",filter);
-
+/* -------- Filter -------- */
 function filter(){
 
 const q=searchInput.value.toLowerCase();
-
 const src=sourceFilter.value;
 
 const start=startDateInput.value?new Date(startDateInput.value):new Date(0);
-
 const end=endDateInput.value?new Date(endDateInput.value):new Date();
 
 displayedArticles=allArticles.filter(a=>{
@@ -417,10 +251,7 @@ displayedArticles=allArticles.filter(a=>{
 if(src && a.source!==src) return false;
 
 const d=a.scraped_at||a.date;
-
-if(!d) return false;
-
-if(d<start || d>end) return false;
+if(!d || d<start || d>end) return false;
 
 if(!q) return true;
 
@@ -430,12 +261,15 @@ return a.title.toLowerCase().includes(q) ||
 });
 
 currentPage=1;
-
 render();
-
 }
 
-loadSheet();
+searchInput.addEventListener("input",filter);
+sourceFilter.addEventListener("change",filter);
+document.getElementById("applyDateFilter").onclick=filter;
+
+/* -------- Start -------- */
+load();
 
 </script>
 
