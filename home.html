@@ -78,13 +78,13 @@ window.scrollTo({top:0,behavior:"smooth"});
 function parseDate(v){
   if(!v) return null;
 
-  // handle formatted string like "2026-04-05 12:00:00"
+  // handle "YYYY-MM-DD HH:mm:ss"
   if(typeof v === "string"){
-    const d = new Date(v.replace(" ", "T")); // important fix
-    return isNaN(d) ? null : d;
+    const d = new Date(v.replace(" ", "T"));
+    if(!isNaN(d)) return d;
   }
 
-  // fallback
+  // fallback: try normal parse
   const d = new Date(v);
   return isNaN(d) ? null : d;
 }
@@ -106,7 +106,17 @@ const rows=json.table.rows;
 allArticles=rows.slice(1).map(r=>{
 const c = r.c.map(x => {
   if (!x) return "";
-  return x.f || x.v;   // ✅ use formatted value
+
+  // If formatted value exists → use it
+  if (x.f) return x.f;
+
+  // If raw value is Date(...) → convert manually
+  if (typeof x.v === "string" && x.v.startsWith("Date(")) {
+    const p = x.v.match(/\d+/g).map(Number);
+    return `${p[0]}-${String(p[1]+1).padStart(2,'0')}-${String(p[2]).padStart(2,'0')} ${String(p[3]||0).padStart(2,'0')}:${String(p[4]||0).padStart(2,'0')}:${String(p[5]||0).padStart(2,'0')}`;
+  }
+
+  return x.v;
 });
 
 const pub=parseDate(c[2]);
