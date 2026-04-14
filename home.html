@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>News Monitor — Latest Articles</title>
+<title>News Monitor — Latest Articles (Newest First)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
 <style>
@@ -34,6 +34,7 @@ margin-bottom:12px;
 display:flex;
 gap:12px;
 box-shadow:0 1px 3px rgba(0,0,0,.06);
+transition:0.1s;
 }
 
 .thumb{
@@ -41,6 +42,7 @@ width:160px;
 height:120px;
 object-fit:cover;
 border-radius:6px;
+background:#f0f0f0;
 }
 
 .meta{
@@ -57,6 +59,7 @@ margin:0 0 6px 0;
 .snippet{
 font-size:14px;
 line-height:1.4;
+color:#2c3e44;
 }
 
 .controls{
@@ -64,12 +67,14 @@ display:flex;
 flex-wrap:wrap;
 gap:10px;
 margin:12px 0;
+align-items:center;
 }
 
 .search,.filter,.date-input{
 padding:8px 10px;
 border-radius:6px;
 border:1px solid #d6d6d6;
+font-size:14px;
 }
 
 .search{
@@ -87,6 +92,11 @@ text-decoration:none;
 color:inherit;
 }
 
+a.title-link:hover{
+text-decoration:underline;
+color:#0b5cff;
+}
+
 .scraped-info{
 font-size:11px;
 color:#888;
@@ -99,6 +109,7 @@ padding-top:4px;
 text-align:center;
 color:#666;
 padding:30px;
+font-style:italic;
 }
 
 .pagination{
@@ -106,6 +117,7 @@ display:flex;
 justify-content:center;
 gap:10px;
 margin:20px 0;
+align-items:center;
 }
 
 button{
@@ -114,10 +126,17 @@ border:1px solid #ddd;
 background:white;
 border-radius:4px;
 cursor:pointer;
+transition:0.1s;
+}
+
+button:hover:not(:disabled){
+background:#f0f0f0;
+border-color:#bbb;
 }
 
 button:disabled{
 opacity:.5;
+cursor:default;
 }
 
 /* Floating "Top" button */
@@ -132,15 +151,15 @@ opacity:.5;
   border-radius: 50%;
   width: 48px;
   height: 48px;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.2s, transform 0.2s;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 #topBtn:hover {
@@ -151,9 +170,9 @@ opacity:.5;
 
 @media (max-width: 600px) {
   #topBtn {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
     bottom: 20px;
     right: 20px;
   }
@@ -161,6 +180,19 @@ opacity:.5;
     width: 100px;
     height: 80px;
   }
+  .card {
+    gap: 8px;
+  }
+}
+
+.badge-new {
+  background: #0b5cff10;
+  color: #0b5cff;
+  font-size: 10px;
+  border-radius: 20px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  font-weight: normal;
 }
 
 </style>
@@ -171,8 +203,8 @@ opacity:.5;
 
 <header>
 <div class="container">
-<h1 style="margin:0;font-size:20px;">News Monitor</h1>
-<div style="font-size:13px">Latest scraped articles</div>
+<h1 style="margin:0;font-size:20px;">📰 News Monitor</h1>
+<div style="font-size:13px">Latest scraped articles — newest first</div>
 </div>
 </header>
 
@@ -180,16 +212,16 @@ opacity:.5;
 
 <div class="controls">
 
-<input id="search" class="search" placeholder="Search title or snippet"/>
+<input id="search" class="search" placeholder="🔍 Search title or snippet"/>
 
 <select id="sourceFilter" class="filter">
 <option value="">All sources</option>
 </select>
 
-<input type="date" id="startDate" class="date-input"/>
-<input type="date" id="endDate" class="date-input"/>
+<input type="date" id="startDate" class="date-input" placeholder="From date"/>
+<input type="date" id="endDate" class="date-input" placeholder="To date"/>
 
-<button id="applyDateFilter">Filter</button>
+<button id="applyDateFilter">📅 Apply date filter</button>
 
 <div style="margin-left:auto" class="small" id="count"></div>
 
@@ -197,45 +229,44 @@ opacity:.5;
 
 <div id="list"></div>
 
-<div id="loading" class="empty">Loading articles…</div>
+<div id="loading" class="empty">⏳ Loading articles from Google Sheet...</div>
 
 <div id="pagination" class="pagination"></div>
 
 </main>
 
 <!-- Floating Top Button -->
-<button id="topBtn" title="Go to top">↑</button>
+<button id="topBtn" title="Scroll to top">↑</button>
 
 <script>
 
-const SPREADSHEET_ID="1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
-const SHEET_GID="0";
+const SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
+const SHEET_GID = "0";
 
-const ARTICLES_PER_PAGE=50;
-const INITIAL_LIMIT=400;
+const ARTICLES_PER_PAGE = 50;
+const INITIAL_LIMIT = 400;   // Load up to 400 most recent articles after sorting
 
-const URL=`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+const URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
-const listEl=document.getElementById("list");
-const loadingEl=document.getElementById("loading");
-const paginationEl=document.getElementById("pagination");
+const listEl = document.getElementById("list");
+const loadingEl = document.getElementById("loading");
+const paginationEl = document.getElementById("pagination");
 
-const searchInput=document.getElementById("search");
-const sourceFilter=document.getElementById("sourceFilter");
+const searchInput = document.getElementById("search");
+const sourceFilter = document.getElementById("sourceFilter");
 
-const startDateInput=document.getElementById("startDate");
-const endDateInput=document.getElementById("endDate");
+const startDateInput = document.getElementById("startDate");
+const endDateInput = document.getElementById("endDate");
 
-const countEl=document.getElementById("count");
+const countEl = document.getElementById("count");
 
-let allArticles=[];
-let displayedArticles=[];
-let currentPage=1;
+let allArticles = [];        // Master array (already sorted newest scraped first)
+let displayedArticles = [];  // Filtered version
+let currentPage = 1;
 
 // ========== FLOATING TOP BUTTON + SMOOTH SCROLL ==========
 const topBtn = document.getElementById("topBtn");
 
-// Function to scroll smoothly to top
 function scrollToTopSmooth() {
   window.scrollTo({
     top: 0,
@@ -243,7 +274,6 @@ function scrollToTopSmooth() {
   });
 }
 
-// Show/hide top button based on scroll position
 function handleTopButtonVisibility() {
   if (window.scrollY > 300) {
     topBtn.style.display = "flex";
@@ -252,126 +282,138 @@ function handleTopButtonVisibility() {
   }
 }
 
-// Attach click event to top button
 topBtn.addEventListener("click", scrollToTopSmooth);
 window.addEventListener("scroll", handleTopButtonVisibility);
-// initial check
 handleTopButtonVisibility();
 
-// ========== DATE PARSING: handles both date_text (c[2]) and scraped_at (c[7]) ==========
-
-function parseGVizDate(v){
-  if(!v) return null;
-  if(v instanceof Date) return v;
+// ========== ROBUST DATE PARSING (handles Google Viz, strings, etc) ==========
+function parseGVizDate(value) {
+  if (!value) return null;
+  if (value instanceof Date && !isNaN(value)) return value;
   
-  // Handle Google Visualization API Date format: "Date(2026,3,5,12,0,0)" -> month index 3 means April (0-based)
-  if(typeof v === "string" && v.startsWith("Date(")){
-    const numbers = v.match(/\d+/g).map(Number);
-  
-    let year = numbers[0];
-    let month = numbers[1];  // already 0-indexed
-    let day = numbers[2];
-    let hour = numbers[3] || 0;
-    let minute = numbers[4] || 0;
-    let second = numbers[5] || 0;
-    return new Date(year, month, day, hour, minute, second);
+  // Handle Google Visualization API format: "Date(2026,3,5,12,0,0)" (month 0-indexed)
+  if (typeof value === "string" && value.startsWith("Date(")) {
+    const numbers = value.match(/\d+/g).map(Number);
+    if (numbers.length >= 3) {
+      const [year, month, day, hour = 0, minute = 0, second = 0] = numbers;
+      return new Date(year, month, day, hour, minute, second);
+    }
   }
   
-  // Try standard date parsing
-  const d = new Date(v);
-  return isNaN(d) ? null : d;
+  // Try standard date parsing (ISO, "2026-04-05 12:00:00", etc)
+  const parsed = new Date(value);
+  return isNaN(parsed) ? null : parsed;
 }
 
-// Format date for display: returns readable string or "No date"
-function formatDate(d){
-  if(!d) return "No date";
-  // check if valid date
-  if (isNaN(d.getTime())) return "Invalid date";
-  return d.toLocaleDateString() + " " + d.toLocaleTimeString([],{
-    hour:"2-digit",
-    minute:"2-digit"
-  });
+function formatDate(dateObj) {
+  if (!dateObj || isNaN(dateObj.getTime())) return "No date";
+  return dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-
-async function loadSheet(){
+// ========== LOAD SHEET & REVERSE ORDER (NEWEST SCRAPED AT THE TOP) ==========
+async function loadSheet() {
   loadingEl.style.display = "block";
   listEl.innerHTML = "";
+  
   try {
-    const res = await fetch(URL);
-    const txt = await res.text();
-    const json = JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
+    const response = await fetch(URL);
+    const text = await response.text();
+    const jsonMatch = text.match(/setResponse\(([\s\S]*)\);/);
+    if (!jsonMatch) throw new Error("Invalid Google Sheets response");
+    const json = JSON.parse(jsonMatch[1]);
     const rows = json.table.rows;
     
-    allArticles = rows.slice(1).map(r => {
-      const c = r.c.map(x => x ? x.v : "");
+    if (!rows || rows.length < 2) {
+      loadingEl.innerHTML = '<div class="empty">📭 No articles found in the sheet.</div>';
+      return;
+    }
+    
+    // Parse rows (skip header row at index 0)
+    const rawArticles = rows.slice(1).map(row => {
+      const cells = row.c.map(cell => (cell ? cell.v : ""));
       
-      // c[2] = date_text column, c[7] = scraped_at column
-      const dateTextRaw = c[2];
-      const scrapedAtRaw = c[7];
+      // Column mapping based on sample: 
+      // 0: source, 1: title, 2: date_text, 3: link, 4: author, 5: snippet, 6: image_url, 7: scraped_at
+      const source = cells[0] || "";
+      const title = cells[1] || "";
+      const dateTextRaw = cells[2];
+      const link = cells[3] || "";
+      const author = cells[4] || "";
+      const snippet = cells[5] || "";
+      const imageUrl = cells[6] || "";
+      const scrapedAtRaw = cells[7];
       
-      // Parse both dates properly
-      let parsedDateText = parseGVizDate(dateTextRaw);
-      let parsedScrapedAt = parseGVizDate(scrapedAtRaw);
+      // Parse both dates
+      let dateTextObj = parseGVizDate(dateTextRaw);
+      let scrapedAtObj = parseGVizDate(scrapedAtRaw);
       
-      // Fallback: if date_text is empty/invalid, try to parse again from string if it's a plain string like "2026-04-05 12:00:00"
-      if (!parsedDateText && dateTextRaw && typeof dateTextRaw === "string" && dateTextRaw.trim() !== "") {
-        const fallbackDate = new Date(dateTextRaw);
-        if (!isNaN(fallbackDate)) parsedDateText = fallbackDate;
+      // Additional fallback for plain string dates like "2026-04-05 12:00:00"
+      if (!dateTextObj && dateTextRaw && typeof dateTextRaw === "string" && dateTextRaw.trim()) {
+        const fallback = new Date(dateTextRaw);
+        if (!isNaN(fallback)) dateTextObj = fallback;
       }
-      if (!parsedScrapedAt && scrapedAtRaw && typeof scrapedAtRaw === "string" && scrapedAtRaw.trim() !== "") {
-        const fallbackScraped = new Date(scrapedAtRaw);
-        if (!isNaN(fallbackScraped)) parsedScrapedAt = fallbackScraped;
+      if (!scrapedAtObj && scrapedAtRaw && typeof scrapedAtRaw === "string" && scrapedAtRaw.trim()) {
+        const fallback = new Date(scrapedAtRaw);
+        if (!isNaN(fallback)) scrapedAtObj = fallback;
       }
       
-      // Determine the date to show in the UI (priority: date_text if exists, otherwise scraped_at)
-      let displayDate = parsedDateText && !isNaN(parsedDateText.getTime()) ? parsedDateText : (parsedScrapedAt || null);
-      
-     
-      let sortDate = parsedScrapedAt && !isNaN(parsedScrapedAt.getTime()) ? parsedScrapedAt : (parsedDateText || null);
-      
-      // For backward compatibility and _ts sorting: ensure we have a timestamp for initial reverse order (scraped_at > date_text)
-      let timestamp = sortDate ? sortDate.getTime() : 0;
+      // Primary timestamp for sorting: use scraped_at if available, otherwise date_text, otherwise 0
+      let sortTimestamp = 0;
+      if (scrapedAtObj && !isNaN(scrapedAtObj)) {
+        sortTimestamp = scrapedAtObj.getTime();
+      } else if (dateTextObj && !isNaN(dateTextObj)) {
+        sortTimestamp = dateTextObj.getTime();
+      }
       
       return {
-        source: c[0] || "",
-        title: c[1] || "",
-        date_text_obj: parsedDateText,   // original date from article
-        date: parsedDateText,            // keep 'date' property as per existing code
-        link: c[3] || "",
-        author: c[4] || "",
-        snippet: c[5] || "",
-        image: c[6] || "",
-        scraped_at: parsedScrapedAt,
-        _ts: timestamp,                 // for reverse chronological order
-        // extra for meta display: we want to show date_text if exists, else scraped_at
-        getDisplayDateObj() {
-          return (this.date_text_obj && !isNaN(this.date_text_obj.getTime())) ? this.date_text_obj : (this.scraped_at || null);
+        source: source,
+        title: title,
+        date_text_obj: dateTextObj,
+        date: dateTextObj,           // for backward compatibility
+        link: link,
+        author: author,
+        snippet: snippet,
+        image: imageUrl,
+        scraped_at: scrapedAtObj,
+        _sortTimestamp: sortTimestamp,
+        // helper for display (prioritize date_text, else scraped_at)
+        getDisplayDate() {
+          if (this.date_text_obj && !isNaN(this.date_text_obj)) return this.date_text_obj;
+          if (this.scraped_at && !isNaN(this.scraped_at)) return this.scraped_at;
+          return null;
         }
       };
-    }).filter(a => a.title && a.title.trim() !== ""); // filter empty titles
+    }).filter(article => article.title && article.title.trim() !== "");
     
+    // **** CRITICAL: SORT BY SCRAPED TIMESTAMP DESCENDING (NEWEST FIRST) ****
+    // This ensures articles from the bottom of the sheet (most recent scraped_at) appear on top.
+    allArticles = rawArticles.sort((a, b) => b._sortTimestamp - a._sortTimestamp);
     
-    allArticles.sort((a,b) => b._ts - a._ts);
+    // Limit to INITIAL_LIMIT for performance (keep most recent N articles)
+    if (allArticles.length > INITIAL_LIMIT) {
+      allArticles = allArticles.slice(0, INITIAL_LIMIT);
+    }
     
-    // Limit to INITIAL_LIMIT as before
-    displayedArticles = allArticles.slice(0, INITIAL_LIMIT);
+    // Initialize displayed articles with all (no filter yet)
+    displayedArticles = [...allArticles];
     
     populateSources();
     render();
-  } catch(err) {
-    console.error("Error loading sheet:", err);
-    loadingEl.innerHTML = '<div class="empty">⚠️ Failed to load articles. Please check network or sheet permissions.</div>';
+    loadingEl.style.display = "none";
+    
+  } catch (error) {
+    console.error("Sheet load error:", error);
+    loadingEl.innerHTML = `<div class="empty">❌ Failed to load articles. Check network / sheet permissions.<br>${error.message}</div>`;
     loadingEl.style.display = "block";
   }
 }
 
-function populateSources(){
+function populateSources() {
   const sources = [...new Set(allArticles.map(a => a.source).filter(Boolean))].sort();
-  sourceFilter.innerHTML = '<option value="">All sources</option>' + sources.map(s => `<option>${escapeHtml(s)}</option>`).join("");
+  sourceFilter.innerHTML = '<option value="">🌐 All sources</option>' + 
+    sources.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
 }
 
-// Helper to escape HTML
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>]/g, function(m) {
@@ -379,131 +421,134 @@ function escapeHtml(str) {
     if (m === '<') return '&lt;';
     if (m === '>') return '&gt;';
     return m;
-  }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-    return c;
   });
 }
 
-// Render the article list with pagination, shows proper date logic (date_text if available else scraped_at)
-function render(){
-  loadingEl.style.display = "none";
-  listEl.innerHTML = "";
-  
-  if (displayedArticles.length === 0) {
-    listEl.innerHTML = '<div class="empty">📭 No articles match the filters.</div>';
+// ========== RENDER ARTICLES WITH PAGINATION & PROPER DATE DISPLAY ==========
+function render() {
+  if (!displayedArticles.length) {
+    listEl.innerHTML = '<div class="empty">📭 No articles match your filters.</div>';
     countEl.textContent = "0 articles";
     paginationEl.innerHTML = "";
     return;
   }
   
-  const start = (currentPage-1) * ARTICLES_PER_PAGE;
-  const pageArticles = displayedArticles.slice(start, start + ARTICLES_PER_PAGE);
+  const startIdx = (currentPage - 1) * ARTICLES_PER_PAGE;
+  const pageArticles = displayedArticles.slice(startIdx, startIdx + ARTICLES_PER_PAGE);
   
-  pageArticles.forEach(a => {
+  listEl.innerHTML = "";
+  
+  pageArticles.forEach(article => {
     const card = document.createElement("div");
     card.className = "card";
     
-    if(a.image && a.image.trim() !== ""){
+    // Thumbnail image
+    if (article.image && article.image.trim() !== "") {
       const img = document.createElement("img");
       img.className = "thumb";
-      img.src = a.image;
+      img.src = article.image;
+      img.alt = "news thumbnail";
       img.onerror = () => img.remove();
-      img.alt = "thumbnail";
       card.appendChild(img);
     }
     
-    const bodyDiv = document.createElement("div");
-    bodyDiv.style.flex = "1";
+    const contentDiv = document.createElement("div");
+    contentDiv.style.flex = "1";
     
-    // Build meta line: source + display date (prioritize date_text, fallback scraped_at)
-    const displayDateObj = a.getDisplayDateObj ? a.getDisplayDateObj() : (a.date_text_obj || a.scraped_at);
-    const metaDateStr = formatDate(displayDateObj);
-    const sourceText = a.source && a.source.trim() !== "" ? a.source : "Unknown source";
+    // Meta line: source + display date (date_text if exists, else scraped_at)
+    const displayDateObj = article.getDisplayDate();
+    const dateString = formatDate(displayDateObj);
+    const sourceDisplay = article.source && article.source.trim() ? article.source : "Unknown source";
     
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.textContent = `${sourceText} • ${metaDateStr}`;
-    bodyDiv.appendChild(meta);
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "meta";
+    metaDiv.innerHTML = `📰 ${escapeHtml(sourceDisplay)} • 🕒 ${dateString}`;
+    contentDiv.appendChild(metaDiv);
     
-    const titleWrap = document.createElement("h3");
-    titleWrap.className = "title";
+    // Title with link
+    const titleEl = document.createElement("h3");
+    titleEl.className = "title";
     const link = document.createElement("a");
     link.className = "title-link";
-    link.href = a.link && a.link.startsWith("http") ? a.link : "#";
+    link.href = article.link && article.link.startsWith("http") ? article.link : "#";
     link.target = "_blank";
-    link.textContent = a.title || "Untitled";
-    titleWrap.appendChild(link);
-    bodyDiv.appendChild(titleWrap);
+    link.rel = "noopener noreferrer";
+    link.textContent = article.title || "Untitled";
+    titleEl.appendChild(link);
+    contentDiv.appendChild(titleEl);
     
-    if(a.snippet && a.snippet.trim()){
-      const snipDiv = document.createElement("div");
-      snipDiv.className = "snippet";
-      snipDiv.textContent = a.snippet.length > 400 ? a.snippet.substring(0,400)+"…" : a.snippet;
-      bodyDiv.appendChild(snipDiv);
+    // Snippet
+    if (article.snippet && article.snippet.trim()) {
+      const snippetDiv = document.createElement("div");
+      snippetDiv.className = "snippet";
+      let snippetText = article.snippet;
+      if (snippetText.length > 350) snippetText = snippetText.substring(0, 350) + "…";
+      snippetDiv.textContent = snippetText;
+      contentDiv.appendChild(snippetDiv);
     }
     
-    // Always show scraped_at info (as per original but enhanced)
-    if(a.scraped_at && !isNaN(a.scraped_at.getTime())){
+    // Scraped timestamp info (always show when available)
+    if (article.scraped_at && !isNaN(article.scraped_at)) {
       const scrapedDiv = document.createElement("div");
       scrapedDiv.className = "scraped-info";
-      scrapedDiv.textContent = "📅 Scraped: " + formatDate(a.scraped_at);
-      bodyDiv.appendChild(scrapedDiv);
-    } else if(a.date_text_obj && !isNaN(a.date_text_obj.getTime())){
-      // Optionally show if only date_text exists but no scraped_at (rare but safe)
-      const scrapedDiv = document.createElement("div");
-      scrapedDiv.className = "scraped-info";
-      scrapedDiv.textContent = "📅 Published: " + formatDate(a.date_text_obj);
-      bodyDiv.appendChild(scrapedDiv);
+      scrapedDiv.innerHTML = `🕸️ Scraped at: ${formatDate(article.scraped_at)}`;
+      contentDiv.appendChild(scrapedDiv);
+    } else if (article.date_text_obj && !isNaN(article.date_text_obj)) {
+      // fallback: show published date if scraped missing
+      const pubDiv = document.createElement("div");
+      pubDiv.className = "scraped-info";
+      pubDiv.innerHTML = `📅 Published: ${formatDate(article.date_text_obj)}`;
+      contentDiv.appendChild(pubDiv);
     }
     
-    card.appendChild(bodyDiv);
+    card.appendChild(contentDiv);
     listEl.appendChild(card);
   });
   
-  countEl.textContent = displayedArticles.length + " articles";
+  countEl.textContent = `${displayedArticles.length} article${displayedArticles.length !== 1 ? 's' : ''} (newest first)`;
   renderPagination();
-  
- 
 }
 
-function renderPagination(){
+function renderPagination() {
   const totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
   paginationEl.innerHTML = "";
-  if(totalPages <= 1) return;
+  
+  if (totalPages <= 1) return;
   
   const prevBtn = document.createElement("button");
-  prevBtn.textContent = "Prev";
+  prevBtn.textContent = "◀ Prev";
   prevBtn.disabled = currentPage === 1;
   prevBtn.onclick = () => {
-    if(currentPage > 1){
+    if (currentPage > 1) {
       currentPage--;
       render();
-      scrollToTopSmooth();   // smooth scroll to top when prev clicked
+      scrollToTopSmooth();  // smooth scroll to top when prev clicked
     }
   };
   
   const nextBtn = document.createElement("button");
-  nextBtn.textContent = "Next";
+  nextBtn.textContent = "Next ▶";
   nextBtn.disabled = currentPage === totalPages;
   nextBtn.onclick = () => {
-    if(currentPage < totalPages){
+    if (currentPage < totalPages) {
       currentPage++;
       render();
-      scrollToTopSmooth();   // smooth scroll to top when next clicked
+      scrollToTopSmooth();  // smooth scroll to top when next clicked
     }
   };
   
-  const pageSpan = document.createElement("span");
-  pageSpan.textContent = `Page ${currentPage} / ${totalPages}`;
-  pageSpan.style.padding = "0 8px";
+  const pageInfo = document.createElement("span");
+  pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+  pageInfo.style.fontSize = "14px";
+  pageInfo.style.padding = "0 12px";
   
   paginationEl.appendChild(prevBtn);
-  paginationEl.appendChild(pageSpan);
+  paginationEl.appendChild(pageInfo);
   paginationEl.appendChild(nextBtn);
 }
 
-
-function filter(){
+// ========== FILTER LOGIC (search, source, date range based on scraped_at) ==========
+function applyFilters() {
   const query = searchInput.value.toLowerCase().trim();
   const selectedSource = sourceFilter.value;
   const startRaw = startDateInput.value;
@@ -512,31 +557,37 @@ function filter(){
   let startDate = startRaw ? new Date(startRaw) : null;
   let endDate = endRaw ? new Date(endRaw) : null;
   
-  // set time to beginning of day for start, end of day for end
   if (startDate) {
-    startDate.setHours(0,0,0,0);
+    startDate.setHours(0, 0, 0, 0);
   }
   if (endDate) {
-    endDate.setHours(23,59,59,999);
+    endDate.setHours(23, 59, 59, 999);
   }
   
-  displayedArticles = allArticles.filter(a => {
+  displayedArticles = allArticles.filter(article => {
     // Source filter
-    if (selectedSource && a.source !== selectedSource) return false;
+    if (selectedSource && article.source !== selectedSource) return false;
     
-    // Search filter (title or snippet)
+    // Text search (title or snippet)
     if (query) {
-      const titleMatch = a.title.toLowerCase().includes(query);
-      const snippetMatch = (a.snippet || "").toLowerCase().includes(query);
+      const titleMatch = article.title.toLowerCase().includes(query);
+      const snippetMatch = (article.snippet || "").toLowerCase().includes(query);
       if (!titleMatch && !snippetMatch) return false;
     }
     
-    // Date range filter: use scraped_at if available (always), otherwise date_text
-    let compareDate = a.scraped_at && !isNaN(a.scraped_at.getTime()) ? a.scraped_at : (a.date_text_obj || null);
-    if (!compareDate) return false; // No date available, skip if date filter is applied? But if both null, only include if no range.
-    // If startDate or endDate are defined, we enforce.
-    if (startDate && compareDate < startDate) return false;
-    if (endDate && compareDate > endDate) return false;
+    // Date range: use scraped_at as primary (most reliable), fallback to date_text if scraped missing
+    let compareDate = null;
+    if (article.scraped_at && !isNaN(article.scraped_at)) {
+      compareDate = article.scraped_at;
+    } else if (article.date_text_obj && !isNaN(article.date_text_obj)) {
+      compareDate = article.date_text_obj;
+    }
+    
+    if (startDate && compareDate && compareDate < startDate) return false;
+    if (endDate && compareDate && compareDate > endDate) return false;
+    
+    // If date filter is active but article has no valid date, exclude it (so it doesn't pollute)
+    if ((startDate || endDate) && !compareDate) return false;
     
     return true;
   });
@@ -545,25 +596,16 @@ function filter(){
   render();
 }
 
-// Attach event listeners
-searchInput.addEventListener("input", filter);
-sourceFilter.addEventListener("change", filter);
-document.getElementById("applyDateFilter").addEventListener("click", filter);
-
-
-function setDefaultDateRange() {
-  // Not required, but we can optionally set endDate to today's date for convenience
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  endDateInput.value = `${yyyy}-${mm}-${dd}`;
-  // startDate remains empty to show all older articles by default.
-}
+// ========== EVENT LISTENERS ==========
+searchInput.addEventListener("input", applyFilters);
+sourceFilter.addEventListener("change", applyFilters);
+document.getElementById("applyDateFilter").addEventListener("click", applyFilters);
 
 
 loadSheet();
 
+
+console.log("News Monitor: Articles will be shown with latest scraped_at on top (reverse order of sheet rows).");
 
 </script>
 </body>
