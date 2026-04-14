@@ -80,7 +80,7 @@ function parseDate(v){
 
   // handle "YYYY-MM-DD HH:mm:ss"
   if(typeof v === "string"){
-    const d = new Date(v.replace(" ", "T"));
+    const d = new Date(v.replace(" ", "T") + "Z");
     if(!isNaN(d)) return d;
   }
 
@@ -101,37 +101,31 @@ const res=await fetch(URL);
 const txt=await res.text();
 const json=JSON.parse(txt.match(/setResponse\(([\s\S]*)\);/)[1]);
 
-const rows=json.table.rows;
+const cols = json.table.cols.map(col => col.label.toLowerCase());
+const rows = json.table.rows;
 
-allArticles=rows.slice(1).map(r=>{
-const c = r.c.map(x => {
-  if (!x) return "";
+allArticles = rows.map(r => {
+  const obj = {};
 
-  // If formatted value exists → use it
-  if (x.f) return x.f;
+  r.c.forEach((cell, i) => {
+    const key = cols[i];
+    if (!key) return;
+    obj[key] = cell ? (cell.f || cell.v) : "";
+  });
 
-  // If raw value is Date(...) → convert manually
-  if (typeof x.v === "string" && x.v.startsWith("Date(")) {
-    const p = x.v.match(/\d+/g).map(Number);
-    return `${p[0]}-${String(p[1]+1).padStart(2,'0')}-${String(p[2]).padStart(2,'0')} ${String(p[3]||0).padStart(2,'0')}:${String(p[4]||0).padStart(2,'0')}:${String(p[5]||0).padStart(2,'0')}`;
-  }
+  const pub = parseDate(obj["date_text"]);
+  const scraped = parseDate(obj["scraped_at"]);
 
-  return x.v;
-});
-
-const pub=parseDate(c[2]);
-const scraped=parseDate(c[7]);
-
-return{
-source:c[0],
-title:c[1],
-date:pub,
-link:c[3],
-snippet:c[5],
-image:c[6],
-scraped_at:scraped
-};
-}).filter(a=>a.title);
+  return {
+    source: obj["source"],
+    title: obj["title"],
+    date: pub,
+    link: obj["link"],
+    snippet: obj["snippet"],
+    image: obj["image_url"],
+    scraped_at: scraped
+  };
+}).filter(a => a.title);
 
 allArticles.reverse();
 displayedArticles=allArticles.slice(0,LIMIT);
