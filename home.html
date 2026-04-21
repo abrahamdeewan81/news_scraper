@@ -11,6 +11,7 @@
       font-family: system-ui;
       margin: 0;
       background: #f7f7f9;
+      color: #111;
     }
 
     header {
@@ -35,8 +36,8 @@
     }
 
     .thumb {
-      width: 140px;
-      height: 100px;
+      width: 160px;
+      height: 120px;
       object-fit: cover;
       border-radius: 6px;
     }
@@ -49,12 +50,11 @@
 
     .title {
       font-size: 16px;
-      margin: 0 0 6px;
+      margin: 0 0 6px 0;
     }
 
     .snippet {
       font-size: 14px;
-      color: #333;
     }
 
     .controls {
@@ -68,34 +68,33 @@
     .filter,
     .date-input {
       padding: 8px;
-      border: 1px solid #ccc;
       border-radius: 6px;
+      border: 1px solid #ddd;
     }
 
     .pagination {
       display: flex;
       justify-content: center;
-      gap: 10px;
-      margin: 20px;
+      gap: 8px;
+      margin: 20px 0;
     }
 
     .pagination button {
       padding: 8px 12px;
+      border: 1px solid #ddd;
+      background: #fff;
       cursor: pointer;
     }
 
-    #scrollTopBtn {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #0b5cff;
-      color: #fff;
-      border: none;
-      padding: 10px 14px;
-      border-radius: 50%;
-      cursor: pointer;
-      display: none;
-      font-size: 18px;
+    .pagination button:disabled {
+      opacity: .5;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 30px;
+      background: #fff;
+      border-radius: 8px;
     }
   </style>
 </head>
@@ -103,11 +102,13 @@
 <body>
 
   <header>
-    <h2>News Monitor</h2>
+    <div class="container">
+      <h1>News Monitor</h1>
+      <div>Latest scraped articles</div>
+    </div>
   </header>
 
   <main class="container">
-
     <div class="controls">
       <input id="search" class="search" placeholder="Search..." />
       <select id="sourceFilter" class="filter">
@@ -116,176 +117,231 @@
       <input type="date" id="startDate" class="date-input" />
       <input type="date" id="endDate" class="date-input" />
       <button id="applyDateFilter">Filter</button>
+      <div id="count"></div>
     </div>
 
     <div id="list"></div>
+    <div id="loading" class="empty">Loading…</div>
+    <div id="error" class="empty" style="display:none;"></div>
     <div id="pagination" class="pagination"></div>
-
   </main>
-
-  <button id="scrollTopBtn">↑</button>
 
   <script>
     const SPREADSHEET_ID = "1y_DXPvLZVC843ED6mXmCq2NsL5pF83JJSi_6C0W3L98";
     const SHEET_GID = "0";
+    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+
     const ARTICLES_PER_PAGE = 50;
     const INITIAL_ARTICLES_LIMIT = 400;
 
-    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
-
-    let allArticles = [];
-    let displayedArticles = [];
-    let filteredArticles = [];
-    let currentPage = 1;
-
-    let customStartDate = null;
-    let customEndDate = null;
+    let allArticles = [], displayedArticles = [], filteredArticles = [];
+    let currentPage = 1, totalPages = 1;
+    let customStartDate = null, customEndDate = null;
 
     const listEl = document.getElementById('list');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
     const paginationEl = document.getElementById('pagination');
     const searchInput = document.getElementById('search');
     const sourceFilter = document.getElementById('sourceFilter');
-    const startDateInput = document.getElementById('startDate');
-    const endDateInput = document.getElementById('endDate');
+    const countEl = document.getElementById('count');
 
-    // -------- DATE PARSER --------
-    function parseSheetDate(value) {
-      if (!value) return null;
 
-      // Handle GViz Date(...)
-      if (typeof value === "string" && value.startsWith("Date(")) {
-        const p = value.match(/\d+/g).map(Number);
-        return new Date(p[0], p[1], p[2], p[3] || 0, p[4] || 0, p[5] || 0);
+    // ✅ Robust CSV parser (fixes column shifting completely)
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let cell = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        const next = text[i + 1];
+
+        if (c === '"') {
+          if (inQuotes && next === '"') {
+            cell += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (c === ',' && !inQuotes) {
+          row.push(cell);
+          cell = '';
+        } else if ((c === '\n' || c === '\r') && !inQuotes) {
+          if (cell || row.length) {
+            row.push(cell);
+            rows.push(row);
+            row = [];
+            cell = '';
+          }
+        } else {
+          cell += c;
+        }
       }
 
-      // Handle "YYYY-MM-DD HH:MM:SS"
-      if (typeof value === "string") {
-        const normalized = value.replace(" ", "T"); // KEY FIX
-        const d = new Date(normalized);
-        if (!isNaN(d)) return d;
+      if (cell || row.length) {
+        row.push(cell);
+        rows.push(row);
       }
 
-      const d = new Date(value);
-      return isNaN(d) ? null : d;
-    }
-    function formatDate(val) {
-      const d = parseSheetDate(val);
-      if (!d || isNaN(d)) return "No date";
-      return d.toLocaleString();
+      return rows;
     }
 
-    // -------- FETCH DATA --------
-    async function fetchData() {
-      const res = await fetch(url);
-      const txt = await res.text();
-      const json = JSON.parse(txt.match(/setResponse\(([\s\S]+)\)/)[1]);
 
-      const rows = json.table.rows || [];
+    async function fetchSheet() {
+      try {
+        const res = await fetch(CSV_URL);
+        const text = await res.text();
 
-      allArticles = rows.slice(1).map(r => {
-        const v = r.c.map(c => c ? c.v : '');
-        return {
-          source: v[0] || '',
-          title: v[1] || '',
-          date: v[2] || '',
-          link: v[3] || '',
-          author: v[4] || '',
-          snippet: v[5] || '',
-          image: v[6] || '',
-          scraped_at: v[7] || ''
-        };
-      }).filter(a => a.title || a.snippet);
+        const rows = parseCSV(text);
+        rows.shift();
 
-      // ✅ KEY FIX: reverse sheet order
-      allArticles.reverse();
+        allArticles = rows.map(r => {
+          if (!r) return null;
 
-      displayedArticles = allArticles.slice(0, INITIAL_ARTICLES_LIMIT);
+          // enforce fixed schema
+          const cols = new Array(8).fill('');
 
-      render();
+          for (let i = 0; i < Math.min(r.length, 8); i++) {
+            cols[i] = (r[i] || '').replace(/^"|"$/g, '').trim();
+          }
+
+          if (r.length > 8) {
+            cols[5] = r.slice(5, r.length - 2).join(',').trim();
+            cols[6] = (r[r.length - 2] || '').trim();
+            cols[7] = (r[r.length - 1] || '').trim();
+          }
+
+          return {
+            source: cols[0].replace(/\s+/g, ' '),
+            title: cols[1],
+            date: cols[2],
+            link: cols[3],
+            author: cols[4],
+            snippet: cols[5],
+            image: cols[6],
+            scraped_at: cols[7]
+          };
+        })
+          .filter(a => a && (a.title || a.snippet));
+
+        allArticles.reverse();
+
+        // populate sources
+        const sources = [...new Set(allArticles.map(a => a.source).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b));
+
+        sourceFilter.innerHTML = '<option value="">All sources</option>';
+        sources.forEach(src => {
+          const opt = document.createElement('option');
+          opt.value = src;
+          opt.textContent = src;
+          sourceFilter.appendChild(opt);
+        });
+
+        displayedArticles = allArticles.slice(0, INITIAL_ARTICLES_LIMIT);
+
+        render();
+
+      } catch (e) {
+        errorEl.style.display = 'block';
+        errorEl.textContent = 'Failed to load data';
+      }
     }
 
-    // -------- FILTER --------
+
+    function formatDate(ds) {
+      if (!ds) return '';
+      try {
+        const p = ds.split(/[- :]/);
+        if (p.length >= 5) {
+          const d = new Date(p[0], p[1] - 1, p[2], p[3], p[4], p[5] || 0);
+          return d.toLocaleDateString() + ' ' +
+            d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      } catch (e) { }
+      return '';
+    }
+
+
     function filterArticles() {
       const q = searchInput.value.toLowerCase();
       const sourceVal = sourceFilter.value;
-
-      const start = customStartDate ? new Date(customStartDate) : new Date(0);
-      const end = customEndDate ? new Date(customEndDate) : new Date();
+      let start = customStartDate ? new Date(customStartDate) : new Date(0);
+      let end = customEndDate ? new Date(customEndDate) : new Date();
 
       filteredArticles = allArticles.filter(a => {
-        const d = parseSheetDate(a.date) || parseSheetDate(a.scraped_at);
-        if (!d) return false;
-
+        const d = new Date(a.date || a.scraped_at);
         if (d < start || d > end) return false;
         if (sourceVal && a.source !== sourceVal) return false;
-
         if (!q) return true;
-
-        return (a.title && a.title.toLowerCase().includes(q)) ||
-          (a.snippet && a.snippet.toLowerCase().includes(q));
+        return a.title.toLowerCase().includes(q) || a.snippet.toLowerCase().includes(q);
       });
-
-      // ✅ KEY FIX: sort latest first ONLY when filtering
-      if (sourceVal) {
-        filteredArticles.sort((a, b) => {
-          const da = parseSheetDate(a.date) || parseSheetDate(a.scraped_at) || 0;
-          const db = parseSheetDate(b.date) || parseSheetDate(b.scraped_at) || 0;
-          return db - da;
-        });
-      }
 
       displayedArticles = filteredArticles;
       currentPage = 1;
     }
-    // -------- RENDER --------
+
+
+    function getPage() {
+      const s = (currentPage - 1) * ARTICLES_PER_PAGE;
+      return displayedArticles.slice(s, s + ARTICLES_PER_PAGE);
+    }
+
+
+    function scrollTopSmooth() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+
     function render() {
-      listEl.innerHTML = "";
+      loadingEl.style.display = 'none';
+      listEl.innerHTML = '';
 
-      populateSources();
+      if (!displayedArticles.length) {
+        listEl.innerHTML = '<div class="empty">No articles</div>';
+        return;
+      }
 
-      const start = (currentPage - 1) * ARTICLES_PER_PAGE;
-      const pageItems = displayedArticles.slice(start, start + ARTICLES_PER_PAGE);
+      countEl.textContent = displayedArticles.length + ' articles';
 
-      pageItems.forEach(a => {
+      getPage().forEach(a => {
         const card = document.createElement('div');
-        card.className = "card";
+        card.className = 'card';
 
         if (a.image) {
           const img = document.createElement('img');
+          img.className = 'thumb';
           img.src = a.image;
-          img.className = "thumb";
-          img.onerror = () => img.remove();
           card.appendChild(img);
         }
 
         const body = document.createElement('div');
 
         const meta = document.createElement('div');
-        meta.className = "meta";
-        meta.textContent = `${a.source || 'Unknown'} • ${formatDate(a.date) !== "No date"
-          ? formatDate(a.date)
-          : formatDate(a.scraped_at)}`;
-
-        const title = document.createElement('h3');
-        title.className = "title";
-        title.innerHTML = `<a href="${a.link}" target="_blank">${a.title}</a>`;
-
+        meta.className = 'meta';
+        meta.textContent = (a.source || 'Unknown') + ' • ' + formatDate(a.date || a.scraped_at);
         body.appendChild(meta);
-        body.appendChild(title);
 
-        if (a.author) {
-          const auth = document.createElement('div');
-          auth.className = "meta";
-          auth.textContent = `By ${a.author}`;
-          body.appendChild(auth);
-        }
+        const h = document.createElement('h3');
+        const link = document.createElement('a');
+        link.href = a.link;
+        link.target = '_blank';
+        link.textContent = a.title;
+        h.appendChild(link);
+        body.appendChild(h);
 
         if (a.snippet) {
           const sn = document.createElement('div');
-          sn.className = "snippet";
           sn.textContent = a.snippet;
           body.appendChild(sn);
         }
+
+        const scrp = document.createElement('div');
+        scrp.className = 'meta';
+        scrp.textContent = 'Scraped at: ' + formatDate(a.scraped_at);
+        body.appendChild(scrp);
 
         card.appendChild(body);
         listEl.appendChild(card);
@@ -294,63 +350,42 @@
       renderPagination();
     }
 
-    // -------- PAGINATION --------
-    function renderPagination() {
-      paginationEl.innerHTML = "";
 
-      const total = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
-      if (total <= 1) return;
+    function renderPagination() {
+      totalPages = Math.ceil(displayedArticles.length / ARTICLES_PER_PAGE);
+      if (totalPages <= 1) return;
+
+      paginationEl.innerHTML = '';
 
       const prev = document.createElement('button');
-      prev.textContent = "Prev";
+      prev.textContent = 'Prev';
       prev.disabled = currentPage === 1;
-      prev.onclick = () => { currentPage--; render(); scrollTop(); };
+      prev.onclick = () => { currentPage--; render(); scrollTopSmooth(); };
+      paginationEl.appendChild(prev);
+
+      const info = document.createElement('span');
+      info.textContent = `Page ${currentPage}/${totalPages}`;
+      paginationEl.appendChild(info);
 
       const next = document.createElement('button');
-      next.textContent = "Next";
-      next.disabled = currentPage === total;
-      next.onclick = () => { currentPage++; render(); scrollTop(); };
-
-      paginationEl.append(prev, document.createTextNode(` Page ${currentPage}/${total} `), next);
+      next.textContent = 'Next';
+      next.disabled = currentPage === totalPages;
+      next.onclick = () => { currentPage++; render(); scrollTopSmooth(); };
+      paginationEl.appendChild(next);
     }
 
-    // -------- SOURCE DROPDOWN --------
-    function populateSources() {
-      const sources = [...new Set(allArticles.map(a => a.source).filter(Boolean))].sort();
 
-      const cur = sourceFilter.value;
+    searchInput.oninput = () => { filterArticles(); render(); };
+    sourceFilter.onchange = () => { filterArticles(); render(); };
 
-      sourceFilter.innerHTML =
-        '<option value="">All sources</option>' +
-        sources.map(s => `<option value="${s}" ${s === cur ? 'selected' : ''}>${s}</option>`).join('');
-    }
-
-    // -------- EVENTS --------
-    searchInput.addEventListener('input', () => { filterArticles(); render(); });
-    sourceFilter.addEventListener('change', () => { filterArticles(); render(); });
-
-    document.getElementById('applyDateFilter').addEventListener('click', () => {
-      customStartDate = startDateInput.value || null;
-      customEndDate = endDateInput.value || null;
+    document.getElementById('applyDateFilter').onclick = () => {
+      customStartDate = document.getElementById('startDate').value || null;
+      customEndDate = document.getElementById('endDate').value || null;
       filterArticles();
       render();
-    });
-
-    // -------- SCROLL BUTTON --------
-    const btn = document.getElementById("scrollTopBtn");
-
-    window.onscroll = () => {
-      btn.style.display = window.scrollY > 300 ? "block" : "none";
     };
 
-    function scrollTop() {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    btn.onclick = scrollTop;
-
-    // -------- INIT --------
-    fetchData();
+    fetchSheet();
   </script>
 
 </body>
