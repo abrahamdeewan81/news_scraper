@@ -575,6 +575,7 @@ class SheetNewsScraper:
                 print(
                     f"🔍 Found {len(elements)} elements"
                 )
+                seen_links = set()
                 for el in elements[:limit]:
                     data = self.extract_article(
                         el,
@@ -583,30 +584,53 @@ class SheetNewsScraper:
                     )
 
 
-                    if self.is_valid(data):
+                    if not self.is_valid(data):
+                        continue
 
-                        # ------------------------------------
-                        # Cutoff based on article URL date
-                        # ------------------------------------
+                    link_clean = (
+                        data["link"]
+                        .strip()
+                        .rstrip("/")
+                    )
+                    if link_clean in seen_links:
+                        print(
+                            f"⏩ Skipping duplicate: "
+                            f"{link_clean}"
+                        )
+                        continue
 
-                        if (
-                            data.get("published_date")
-                            and
-                            data["published_date"]
-                            < self.cutoff_time
-                        ):
+                    seen_links.add(link_clean)
 
-                            print(
-                                f"⏩ Skipping old article: "
-                                f"{data.get('title', '')[:70]} "
-                                f"| "
-                                f"{data['published_date']}"
-                            )
+                    published_date = self.get_article_published_date(
+                        data["link"]
+                    )
+                    data["published_date"] = published_date
+                    data["date_text"] = DateParser.format(
+                        published_date
+                    )
 
-                            continue
+                    # ------------------------------------
+                    # Cutoff based on article URL date
+                    # ------------------------------------
+
+                    if (
+                        data.get("published_date")
+                        and
+                        data["published_date"]
+                        < self.cutoff_time
+                    ):
+
+                        print(
+                            f"⏩ Skipping old article: "
+                            f"{data.get('title', '')[:70]} "
+                            f"| "
+                            f"{data['published_date']}"
+                        )
+
+                        continue
 
 
-                        articles.append(data)
+                    articles.append(data)
 
 
             except Exception as e:
@@ -754,21 +778,14 @@ class SheetNewsScraper:
                 )
 
         # PUBLICATION DATE
-
+        # Date extraction is done after duplicacy check in scrape_site
         published_date = None
-        if link:
-            published_date = (
-                self.get_article_published_date(
-                    link
-                )
-            )
+
         return {
             "source": site_name,
             "title": title,
             "link": link,
-            "date_text": DateParser.format(
-                published_date
-            ),
+            "date_text": "",
             "snippet": snippet,
             "author": author,
             "image": image,
