@@ -12,7 +12,7 @@ import json
 import re
 import time
 import requests
-
+from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urljoin
@@ -244,291 +244,337 @@ class SheetNewsScraper:
             f"Total found={total_found}, "
             f"saved={total_saved} new rows."
         )
-
-
-    # ========================================================
-    # ARTICLE PUBLICATION DATE FROM ARTICLE URL
-    # ========================================================
-
+        
+    IST = ZoneInfo("Asia/Kolkata")
+    
+    
+    def parse_date(self, value):
+        """Parse a date string and convert it to IST."""
+    
+        if not value:
+            return None
+    
+        value = str(value).strip()
+    
+        # Handle UTC Z
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+    
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            try:
+                dt = dateutil.parser.parse(value)
+            except Exception:
+                return None
+    
+        # If timezone missing, assume IST
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=IST)
+    
+        return dt.astimezone(IST)
+    
+    
     def get_article_published_date(self, article_url):
-        """
-        Extract publication date/time directly from the article URL.
-
-        Priority:
-        1. JSON-LD datePublished
-        2. JSON-LD @graph datePublished
-        3. Meta publication time
-        4. <time datetime>
-
-        Converts timezone-aware timestamps to IST.
-
-        Returns:
-            timezone-aware datetime in IST
-            or None if publication date cannot be found.
-        """
-
+    
         if not article_url:
             return None
-
+    
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/139.0.0.0 Safari/537.36"
+            ),
+            "Accept": (
+                "text/html,application/xhtml+xml,"
+                "application/xml;q=0.9,image/avif,"
+                "image/webp,*/*;q=0.8"
+            ),
+            "Accept-Language": "en-IN,en;q=0.9"
+        }
+    
         try:
-
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/139.0.0.0 Safari/537.36"
-                ),
-                "Accept": (
-                    "text/html,application/xhtml+xml,"
-                    "application/xml;q=0.9,image/avif,"
-                    "image/webp,*/*;q=0.8"
-                ),
-                "Accept-Language": "en-US,en;q=0.9"
-            }
-
-            print(
-                f"🌐 Fetching article date: {article_url}"
-            )
-
+    
+            print(f"🌐 Fetching article: {article_url}")
+    
             response = requests.get(
                 article_url,
                 headers=headers,
                 timeout=20
             )
-
+    
             response.raise_for_status()
-
+    
             soup = BeautifulSoup(
                 response.text,
                 "html.parser"
             )
-
-            published_value = None
-
-
-            # ------------------------------------------------
-            # 1. JSON-LD datePublished
-            # ------------------------------------------------
-
+    
+            # =====================================================
+            # 1. JSON-LD
+            # =====================================================
+    
             for script in soup.find_all(
                 "script",
                 type="application/ld+json"
             ):
-
-                try:
-
-                    raw_data = (
-                        script.string
-                        or script.get_text()
-                    )
-
-                    if not raw_data:
-                        continue
-
-                    data = json.loads(raw_data)
-
-                    items = (
-                        data
-                        if isinstance(data, list)
-                        else [data]
-                    )
-
-                    for item in items:
-
-                        if not isinstance(item, dict):
-                            continue
-
-
-                        # ------------------------------------
-                        # Direct datePublished
-                        # ------------------------------------
-
-                        if item.get("datePublished"):
-
-                            published_value = (
-                                item["datePublished"]
-                            )
-
-                            break
-
-
-                        # ------------------------------------
-                        # Search inside @graph
-                        # ------------------------------------
-
-                        graph = item.get(
-                            "@graph",
-                            []
-                        )
-
-                        if isinstance(graph, list):
-
-                            for graph_item in graph:
-
-                                if (
-                                    isinstance(
-                                        graph_item,
-                                        dict
-                                    )
-                                    and
-                                    graph_item.get(
-                                        "datePublished"
-                                    )
-                                ):
-
-                                    published_value = (
-                                        graph_item[
-                                            "datePublished"
-                                        ]
-                                    )
-
-                                    break
-
-
-                        if published_value:
-                            break
-
-                except Exception:
-                    # Some websites contain malformed
-                    # JSON-LD. Ignore and continue.
+    
+                raw_data = (
+                    script.string
+                    or script.get_text()
+                )
+    
+                if not raw_data:
                     continue
-
-
-                if published_value:
-                    break
-
-
-            # ------------------------------------------------
+    
+                try:
+                    data = json.loads(raw_data)
+                except Exception:
+                    continue
+    
+                # Flatten possible structures
+                items = []
+    
+                if isinstance(data, list):
+                    items.extend(data)
+    
+                elif isinstance(data, dict):
+    
+                    items.append(data)
+    
+                    graph = data.get("@graph")
+    
+                    if isinstance(graph, list):
+                        items.extend(graph)
+    
+                for item in items:
+    
+                    if not isinstance(item, dict):
+                        continue
+    
+                    published = item.get("datePublished")
+    
+                    if published:
+    
+                        dt = self.parse_date(published)
+    
+                        if dt:
+                            print(
+                                "✅ Found date from JSON-LD:",
+                                dt
+                            )
+                            return dt
+    
+            # =====================================================
             # 2. META TAGS
-            # ------------------------------------------------
-
-            if not published_value:
-
-                meta_selectors = [
-
-                    'meta[property="article:published_time"]',
-
-                    'meta[name="datePublished"]',
-
-                    'meta[name="publish-date"]',
-
-                    'meta[name="published_time"]',
-
-                    'meta[name="pubdate"]',
-
-                ]
-
-                for selector in meta_selectors:
-
-                    meta = soup.select_one(
-                        selector
-                    )
-
-                    if (
-                        meta
-                        and
-                        meta.get("content")
-                    ):
-
-                        published_value = (
-                            meta["content"]
+            # =====================================================
+    
+            meta_selectors = [
+    
+                # Schema / OpenGraph
+                'meta[property="article:published_time"]',
+                'meta[property="og:published_time"]',
+    
+                # Common names
+                'meta[name="datePublished"]',
+                'meta[name="publish-date"]',
+                'meta[name="published_time"]',
+                'meta[name="pubdate"]',
+                'meta[name="publishdate"]',
+                'meta[name="date"]',
+    
+                # Itemprop
+                'meta[itemprop="datePublished"]',
+    
+            ]
+    
+            for selector in meta_selectors:
+    
+                meta = soup.select_one(selector)
+    
+                if not meta:
+                    continue
+    
+                value = (
+                    meta.get("content")
+                    or meta.get("datetime")
+                )
+    
+                if value:
+    
+                    dt = self.parse_date(value)
+    
+                    if dt:
+                        print(
+                            f"✅ Found date from META "
+                            f"({selector}): {dt}"
                         )
-
-                        break
-
-
-            # 3. <time datetime>
-
-            if not published_value:
-
-                time_el = soup.find(
-                    "time",
-                    datetime=True
+                        return dt
+    
+            # =====================================================
+            # 3. <time> elements
+            # =====================================================
+    
+            for time_el in soup.find_all("time"):
+    
+                value = (
+                    time_el.get("datetime")
+                    or time_el.get_text(" ", strip=True)
                 )
-
-                if time_el:
-
-                    published_value = (
-                        time_el.get("datetime")
+    
+                if not value:
+                    continue
+    
+                # Ignore obvious update dates if present
+                text = time_el.get_text(
+                    " ",
+                    strip=True
+                ).lower()
+    
+                if "updated" in text:
+                    continue
+    
+                dt = self.parse_date(value)
+    
+                if dt:
+                    print(
+                        "✅ Found date from <time>:",
+                        dt
                     )
-
+                    return dt
+    
+            # =====================================================
+            # 4. Search visible page text
+            # =====================================================
+    
+            page_text = soup.get_text(
+                " ",
+                strip=True
+            )
+    
+            # Jagran style:
+            #
+            # Published: Sat, 10 Oct 2026 07:22 PM (IST)
+    
+            patterns = [
+    
+                r"Published\s*:\s*"
+                r"([A-Za-z]{3},\s*"
+                r"\d{1,2}\s+"
+                r"[A-Za-z]{3}\s+"
+                r"\d{4}\s+"
+                r"\d{1,2}:\d{2}\s*"
+                r"(?:AM|PM)\s*"
+                r"(?:\(IST\))?)",
+    
+                r"Published\s+"
+                r"([A-Za-z]{3},\s*"
+                r"\d{1,2}\s+"
+                r"[A-Za-z]{3}\s+"
+                r"\d{4}\s+"
+                r"\d{1,2}:\d{2}\s*"
+                r"(?:AM|PM)\s*"
+                r"(?:\(IST\))?)",
+    
+            ]
+    
+            for pattern in patterns:
+    
+                match = re.search(
+                    pattern,
+                    page_text,
+                    re.IGNORECASE
+                )
+    
+                if match:
+    
+                    value = match.group(1).strip()
+    
+                    # Remove IST text before parsing
+                    value = value.replace(
+                        "(IST)",
+                        ""
+                    ).strip()
+    
+                    dt = self.parse_date(value)
+    
+                    if dt:
+    
+                        print(
+                            "✅ Found date from visible text:",
+                            dt
+                        )
+    
+                        return dt
+    
+            # =====================================================
+            # 5. Search HTML directly
+            # =====================================================
+    
+            html = response.text
+    
+            html_patterns = [
+    
+                r'"datePublished"\s*:\s*"([^"]+)"',
+    
+                r'"publishedTime"\s*:\s*"([^"]+)"',
+    
+                r'"publishDate"\s*:\s*"([^"]+)"',
+    
+            ]
+    
+            for pattern in html_patterns:
+    
+                match = re.search(
+                    pattern,
+                    html,
+                    re.IGNORECASE
+                )
+    
+                if match:
+    
+                    value = match.group(1)
+    
+                    dt = self.parse_date(value)
+    
+                    if dt:
+    
+                        print(
+                            "✅ Found date from raw HTML:",
+                            dt
+                        )
+    
+                        return dt
+    
+            # =====================================================
             # Nothing found
-
-            if not published_value:
-
-                print(
-                    f"⚠️ Publication date not found: "
-                    f"{article_url}"
-                )
-
-                return None
-
-            # Normalize date string
-
-
-            date_string = str(
-                published_value
-            ).strip()
-
-
-            # Handle UTC "Z"
-
-            if date_string.endswith("Z"):
-
-                date_string = (
-                    date_string[:-1]
-                    + "+00:00"
-                )
-
-            # Parse timestamp
-
-
-            try:
-
-                dt = datetime.fromisoformat(
-                    date_string
-                )
-
-            except ValueError:
-
-                # Fallback for unusual formats
-
-                dt = dateutil.parser.parse(
-                    date_string
-                )
-
-
-            # If timezone is missing
-
-            if dt.tzinfo is None:
-
-                dt = dt.replace(
-                    tzinfo=IST
-                )
-
-            # Convert to IST
-
-            dt_ist = dt.astimezone(IST)
+            # =====================================================
+    
             print(
-                f"📅 Article date: "
-                f"{dt_ist.strftime('%Y-%m-%d %H:%M:%S')} IST"
+                f"⚠️ Publication date not found: "
+                f"{article_url}"
             )
-            return dt_ist
+    
+            return None
+    
         except requests.RequestException as e:
-
+    
             print(
-                f"⚠️ Failed to fetch article "
-                f"{article_url}: {e}"
+                f"⚠️ Request failed: {e}"
             )
+    
             return None
+    
         except Exception as e:
-
+    
             print(
-                f"⚠️ Failed to extract date from "
-                f"{article_url}: {e}"
+                f"⚠️ Extraction failed: {e}"
             )
-
+    
             return None
+
+
 
     # ========================================================
     # SCRAPE SITE
