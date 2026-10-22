@@ -20,6 +20,8 @@
       padding: 14px 18px;
     }
 
+
+
     .container {
       max-width: 980px;
       margin: 18px auto;
@@ -96,6 +98,23 @@
       background: #fff;
       border-radius: 8px;
     }
+
+
+    .news-text-btn {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 14px;
+      background: #007BFF;
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .news-text-btn:hover {
+      background: #0056b3;
+    }
   </style>
 </head>
 
@@ -105,7 +124,9 @@
     <div class="container">
       <h1>Jharkhand News Monitor</h1>
       <div>Latest scraped articles</div>
-      <a href="https://news-translator-y0bq.onrender.com/" style="font-weight: bold;  display: inline-block;color: white;background-color: #fbfbff42;padding-top: 5px;padding-bottom: 5px;border-radius: 5px;">News Article Extractor: Extracts text only</a>
+      <a href="https://news-translator-y0bq.onrender.com/"
+        style="font-weight: bold;  display: inline-block;color: white;background-color: #fbfbff42;padding-top: 5px;padding-bottom: 5px;border-radius: 5px;">News
+        Article Extractor: Extracts text only</a>
     </div>
   </header>
 
@@ -338,6 +359,23 @@
           sn.textContent = a.snippet;
           body.appendChild(sn);
         }
+
+        const textBtn = document.createElement('a');
+
+        const translatorUrl = new URL(
+          'https://news-translator-y0bq.onrender.com/'
+        );
+
+        translatorUrl.searchParams.set('url', a.link);
+
+        textBtn.href = translatorUrl.toString();
+        textBtn.target = '_blank';
+        textBtn.rel = 'noopener noreferrer';
+        textBtn.textContent = 'Get Text';
+        textBtn.className = 'news-text-btn';
+
+        body.appendChild(textBtn);
+
 
         const scrp = document.createElement('div');
         scrp.className = 'meta';
