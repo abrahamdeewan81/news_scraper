@@ -1,4 +1,4 @@
-name: Scraper
+name: New job scraping
 
 on:
   schedule:
