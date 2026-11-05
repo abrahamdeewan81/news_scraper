@@ -1,3 +1,5 @@
+<!--
+/*
 name: New job scraping
 
 on:
@@ -32,3 +34,4 @@ jobs:
 
       - name: Run scraper
         run: python scraper.py
+        */  -->
